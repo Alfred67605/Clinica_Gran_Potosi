@@ -21,6 +21,7 @@ const MENU_ITEMS = [
       { id: 'registro',        icon: IconUser,        label: 'Registro de Paciente' },
       { id: 'registroClinico', icon: IconStethoscope, label: 'Registro Clínico' },
       { id: 'busqueda',        icon: IconSearch,      label: 'Búsqueda Avanzada' },
+      { id: 'actualizacion',   icon: IconUser,        label: 'Actualizar Datos' }, // Accesible si tiene permiso, oculto en nav por defecto para algunos, pero lo dejamos por si acaso. Aunque Busqueda es mejor. Lo quitaré de la sidebar principal para no saturar, pero lo dejamos si quieres.
       { id: 'historial',       icon: IconHistory,     label: 'Historial Clínico' },
     ],
   },
@@ -43,7 +44,19 @@ function MedicalCross() {
   );
 }
 
-export default function Sidebar({ active, onNavigate }) {
+export default function Sidebar({ active, onNavigate, currentUser, allowedScreens = [] }) {
+  // Filtramos el menú para mostrar solo lo permitido
+  const filteredMenu = MENU_ITEMS.map(section => {
+    return {
+      ...section,
+      // Filtramos los items de esta sección
+      // (Omitimos 'actualizacion' del sidebar para no recargarlo, se accede desde búsqueda)
+      items: section.items.filter(item => allowedScreens.includes(item.id) && item.id !== 'actualizacion')
+    };
+  }).filter(section => section.items.length > 0); // Ocultar secciones vacías
+
+  const getInitials = (nombre) => nombre ? nombre.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'US';
+
   return (
     <aside className="sidebar">
       {/* Logo with glow effect */}
@@ -57,7 +70,7 @@ export default function Sidebar({ active, onNavigate }) {
 
       {/* Navigation with animated indicator */}
       <nav className="sidebar-nav">
-        {MENU_ITEMS.map(({ section, items }) => (
+        {filteredMenu.map(({ section, items }) => (
           <div key={section}>
             <p className="sidebar-section-title">{section}</p>
             {items.map(({ id, icon: Icon, label }) => (
@@ -97,23 +110,19 @@ export default function Sidebar({ active, onNavigate }) {
       </nav>
 
       {/* Footer */}
-      <div className="sidebar-footer">
-        <div className="sidebar-footer-info">
-          <div className="sidebar-avatar">DA</div>
-          <div className="sidebar-footer-text">
-            <p>Dr. Admin</p>
-            <span>Administrador</span>
+      {currentUser && (
+        <div className="sidebar-footer">
+          <div className="sidebar-footer-info">
+            <div className="sidebar-avatar">{getInitials(currentUser.nombre)}</div>
+            <div className="sidebar-footer-text">
+              <p>{currentUser.nombre}</p>
+              <span>{currentUser.rol}</span>
+            </div>
+            {/* Opcional: El logout lo hacemos desde el Navbar, pero si el usuario hace clic aquí también podría funcionar.
+                Por ahora es decorativo si no pasamos onLogout aquí. Lo quitaremos o lo dejamos inactivo si usamos Navbar. */}
           </div>
-          <button
-            style={{ marginLeft:'auto', background:'none', border:'none', color:'#475569', cursor:'pointer', padding:4, display:'flex', borderRadius: 6, transition: 'color 0.2s' }}
-            title="Cerrar sesión"
-            onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
-            onMouseLeave={e => e.currentTarget.style.color = '#475569'}
-          >
-            <IconLogOut width={15} height={15} />
-          </button>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

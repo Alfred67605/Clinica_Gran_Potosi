@@ -3,7 +3,7 @@
  * Features: Theme switcher, glassmorphism, animated notification dot.
  */
 import { useState, useEffect } from 'react';
-import { IconBell, IconChevronRight } from './Icons';
+import { IconBell, IconChevronRight, IconLogOut } from './Icons';
 
 /* Sun / Moon SVG icons for the theme toggle */
 function IconSun({ size = 12 }) {
@@ -30,7 +30,7 @@ function IconMoon({ size = 12 }) {
   );
 }
 
-export default function Navbar({ pageTitle }) {
+export default function Navbar({ pageTitle, currentUser, onLogout }) {
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('clinica_theme');
     if (saved) return saved === 'dark';
@@ -50,6 +50,8 @@ export default function Navbar({ pageTitle }) {
   function toggleTheme() {
     setIsDark(prev => !prev);
   }
+
+  const getInitials = (nombre) => nombre ? nombre.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'US';
 
   return (
     <header className="navbar">
@@ -83,13 +85,26 @@ export default function Navbar({ pageTitle }) {
 
         <div className="navbar-divider" />
 
-        <button className="navbar-user" aria-label="Menú de usuario">
-          <div className="navbar-user-avatar">DA</div>
-          <div className="navbar-user-info">
-            <p>Dr. Admin</p>
-            <span>Administrador</span>
-          </div>
-        </button>
+        {currentUser && (
+          <>
+            <div className="navbar-user" aria-label="Menú de usuario" style={{ cursor: 'default' }}>
+              <div className="navbar-user-avatar">{getInitials(currentUser.nombre)}</div>
+              <div className="navbar-user-info">
+                <p>{currentUser.nombre}</p>
+                <span>{currentUser.rol}</span>
+              </div>
+            </div>
+            
+            <button 
+              onClick={onLogout}
+              className="btn btn-ghost" 
+              style={{ color: 'var(--color-danger)', padding: '6px 12px', marginLeft: 8 }}
+              title="Cerrar Sesión"
+            >
+              <IconLogOut width={16} height={16} /> Cerrar Sesión
+            </button>
+          </>
+        )}
       </div>
     </header>
   );

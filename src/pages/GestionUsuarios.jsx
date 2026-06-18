@@ -1,58 +1,114 @@
 /**
  * GestionUsuarios.jsx — Premium User Management
- * Staggered tables, floating modals with backdrop blur, hover-float stat cards.
+ * Conectado al backend Laravel.
  */
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconUsers, IconPlus, IconEdit, IconTrash, IconX, IconShield, IconAlert } from '../components/Icons';
+import { IconShield, IconSave, IconPlus, IconAlert, IconCheck, IconTrash, IconEdit } from '../components/Icons';
+import { crearUsuario, actualizarUsuario, eliminarUsuario } from '../services/api';
 
-const INIT = [
-  { id:1, nombre:'Dr. Admin',          rol:'Administrador', usuario:'admin',   estado:'Activo' },
-  { id:2, nombre:'Dr. Roberto López',  rol:'Médico',        usuario:'rlopez',  estado:'Activo' },
-  { id:3, nombre:'Lic. Ana Ramos',     rol:'Enfermería',    usuario:'aramos',  estado:'Activo' },
-  { id:4, nombre:'Srta. Carla Vargas', rol:'Recepcionista', usuario:'cvargas', estado:'Inactivo' },
-  { id:5, nombre:'Dr. Miguel Quispe',  rol:'Médico',        usuario:'mquispe', estado:'Activo' },
-];
-const ROLES = ['Administrador','Médico','Enfermería','Recepcionista','Laboratorista'];
-const FORM0 = { nombre:'', usuario:'', rol:'Médico', contrasena:'', confirmar:'', estado:'Activo' };
+const INITIAL = { id: null, nombre: '', usuario: '', rol: 'Médico', estado: 'Activo', contrasena: '' };
 
-function getInitials(nombre) {
-  return nombre.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
+function validate(f, isEdit) {
+  const e = {};
+  if (!f.nombre.trim()) e.nombre = 'Nombre requerido.';
+  if (!f.usuario.trim() || f.usuario.length < 4) e.usuario = 'Usuario inválido (mínimo 4 caracteres).';
+  if (!isEdit && (!f.contrasena || f.contrasena.length < 4)) e.contrasena = 'Contraseña requerida (mín. 4 caracteres).';
+  return e;
 }
 
-export default function GestionUsuarios() {
-  const [usuarios, setUsuarios] = useState(INIT);
-  const [modal,    setModal]    = useState(false);
-  const [editando, setEditando] = useState(null);
-  const [form,     setForm]     = useState(FORM0);
-  const [errs,     setErrs]     = useState({});
-  const [confirm,  setConfirm]  = useState(null);
+export default function GestionUsuarios({ usuarios, reloadUsuarios }) {
+  const [form, setForm] = useState(INITIAL);
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null); // { type: 'success'|'error', text: '' }
+  const [isEdit, setIsEdit] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
-  function abrirCrear()  { setEditando(null); setForm(FORM0); setErrs({}); setModal(true); }
-  function abrirEditar(u){ setEditando(u.id); setForm({ nombre:u.nombre, usuario:u.usuario, rol:u.rol, contrasena:'', confirmar:'', estado:u.estado }); setErrs({}); setModal(true); }
-
-  function validar() {
-    const e = {};
-    if (!form.nombre.trim())  e.nombre  = 'El nombre es requerido.';
-    if (!form.usuario.trim()) e.usuario = 'El usuario es requerido.';
-    if (!editando && !form.contrasena) e.contrasena = 'La contraseña es requerida.';
-    if (form.contrasena && form.contrasena !== form.confirmar) e.confirmar = 'Las contraseñas no coinciden.';
-    return e;
+  function handleChange(e) {
+    const { name, value } = e.target;
+    setForm(p => ({ ...p, [name]: value }));
+    if (touched[name]) setErrors(validate({ ...form, [name]: value }, isEdit));
   }
 
-  function guardar() {
-    const e = validar();
-    if (Object.keys(e).length) { setErrs(e); return; }
-    if (editando) {
-      setUsuarios(p => p.map(u => u.id===editando ? { ...u, nombre:form.nombre, usuario:form.usuario, rol:form.rol, estado:form.estado } : u));
-    } else {
-      setUsuarios(p => [...p, { id:Date.now(), nombre:form.nombre, usuario:form.usuario, rol:form.rol, estado:form.estado }]);
+  function handleBlur(e) {
+    const { name } = e.target;
+    setTouched(p => ({ ...p, [name]: true }));
+    setErrors(validate(form, isEdit));
+  }
+
+  function handleEdit(user) {
+    setForm({ ...user, contrasena: '' });
+    setIsEdit(true);
+    setErrors({});
+    setTouched({});
+    setShowModal(true);
+  }
+
+  function handleNew() {
+    setForm(INITIAL);
+    setIsEdit(false);
+    setErrors({});
+    setTouched({});
+    setShowModal(true);
+  }
+
+  async function handleDelete(id, rol) {
+    if (rol === 'Administrador') {
+      const adminCount = usuarios.filter(u => u.rol === 'Administrador').length;
+      if (adminCount <= 1) {
+        setMessage({ type: 'error', text: 'No se puede eliminar al último Administrador del sistema.' });
+        return;
+      }
     }
-    setModal(false);
+    
+    if (confirm('¿Está seguro de que desea eliminar este usuario?')) {
+      try {
+        await eliminarUsuario(id);
+        await reloadUsuarios();
+        setMessage({ type: 'success', text: 'Usuario eliminado correctamente.' });
+        setTimeout(() => setMessage(null), 3000);
+      } catch (err) {
+        setMessage({ type: 'error', text: err.message });
+      }
+    }
   }
 
-  function eliminar(id) { setUsuarios(p => p.filter(u=>u.id!==id)); setConfirm(null); }
-  const sf = k => e => setForm(f => ({ ...f, [k]:e.target.value }));
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const all = Object.keys(INITIAL).reduce((a,k) => ({ ...a,[k]:true }), {});
+    setTouched(all);
+    const errs = validate(form, isEdit);
+    setErrors(errs);
+    
+    if (!Object.keys(errs).length) {
+      try {
+        setSaving(true);
+        if (isEdit) {
+          // Solo enviar la contraseña si se escribió algo (para cambiarla)
+          const data = { ...form };
+          if (!data.contrasena) delete data.contrasena;
+          await actualizarUsuario(form.id, data);
+          setMessage({ type: 'success', text: 'Usuario actualizado correctamente.' });
+        } else {
+          await crearUsuario(form);
+          setMessage({ type: 'success', text: 'Usuario creado exitosamente.' });
+        }
+        await reloadUsuarios();
+        setShowModal(false);
+        setTimeout(() => setMessage(null), 3000);
+      } catch (err) {
+        setMessage({ type: 'error', text: err.message });
+      } finally {
+        setSaving(false);
+      }
+    }
+  }
+
+  function cls(name) {
+    return touched[name] && errors[name] ? 'form-control error' : 'form-control';
+  }
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -63,163 +119,131 @@ export default function GestionUsuarios() {
     show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 120, damping: 14 } }
   };
 
-  const modalVariants = {
-    hidden: { opacity: 0, scale: 0.95, y: 20 },
-    visible: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', damping: 20, stiffness: 300 } },
-    exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.15 } }
-  };
-
-  const overlayVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { duration: 0.2 } },
-    exit: { opacity: 0, transition: { duration: 0.15 } }
-  };
-
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="show">
       <div className="page-header">
         <div className="page-header-left">
           <h1>Gestión de Usuarios</h1>
-          <p>Administre los usuarios y roles de acceso al sistema.</p>
+          <p>Administre los accesos, roles y credenciales del personal médico y administrativo.</p>
         </div>
-        <motion.button variants={itemVariants} className="btn btn-primary" id="btn-crear-usuario" onClick={abrirCrear} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-          <IconPlus width={14} height={14}/> Crear Usuario
-        </motion.button>
+        <button className="btn btn-primary" onClick={handleNew}>
+          <IconPlus width={16} height={16} /> Nuevo Usuario
+        </button>
       </div>
 
-      <div className="stat-cards" style={{ marginBottom: 16 }}>
-        <motion.div variants={itemVariants} className="stat-card hover-float">
-          <div className="stat-card-icon blue"><IconUsers width={20} height={20}/></div>
-          <div><div className="stat-card-label">Total Usuarios</div><div className="stat-card-value counter-value">{usuarios.length}</div></div>
-        </motion.div>
-        <motion.div variants={itemVariants} className="stat-card hover-float">
-          <div className="stat-card-icon green"><IconUsers width={20} height={20}/></div>
-          <div><div className="stat-card-label">Activos</div><div className="stat-card-value counter-value">{usuarios.filter(u=>u.estado==='Activo').length}</div></div>
-        </motion.div>
-        <motion.div variants={itemVariants} className="stat-card hover-float">
-          <div className="stat-card-icon yellow"><IconShield width={20} height={20}/></div>
-          <div><div className="stat-card-label">Administradores</div><div className="stat-card-value counter-value">{usuarios.filter(u=>u.rol==='Administrador').length}</div></div>
-        </motion.div>
-      </div>
-
-      <motion.div variants={itemVariants} className="card">
-        <div className="card-header">
-          <h2><div className="card-header-icon"><IconUsers width={15} height={15}/></div>Usuarios del Sistema</h2>
-          <span className="chip">{usuarios.length} registros</span>
-        </div>
-        <div className="table-wrapper">
-          <table className="table">
-            <thead><tr><th>#</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
-            <tbody>
-              <AnimatePresence>
-                {usuarios.map((u,i) => (
-                  <motion.tr 
-                    key={u.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    transition={{ delay: i * 0.05 }}
-                  >
-                    <td style={{ color:'var(--color-text-muted)', fontWeight:600, fontSize: 12 }}>{i+1}</td>
-                    <td>
-                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                        <div className="avatar" style={{ background: 'linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-light))', color: 'var(--color-primary-dark)' }}>{getInitials(u.nombre)}</div>
-                        <span style={{ fontWeight:600, fontSize: 13.5 }}>{u.nombre}</span>
-                      </div>
-                    </td>
-                    <td><code style={{ background:'var(--color-bg)', padding:'3px 8px', borderRadius:6, fontSize:12.5, color:'var(--color-text-secondary)', fontWeight: 600 }}>@{u.usuario}</code></td>
-                    <td><span className="badge badge-info">{u.rol}</span></td>
-                    <td><span className={`badge ${u.estado==='Activo'?'badge-success':'badge-neutral'}`}>{u.estado}</span></td>
-                    <td>
-                      <div style={{ display:'flex', gap:6 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={()=>abrirEditar(u)}>
-                          <IconEdit width={13} height={13}/> Editar
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={()=>setConfirm(u.id)} disabled={u.rol==='Administrador'}>
-                          <IconTrash width={13} height={13}/> Eliminar
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
-
-      {/* Modals */}
       <AnimatePresence>
-        {modal && (
-          <motion.div variants={overlayVariants} initial="hidden" animate="visible" exit="exit" className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-usuario-title">
-            <motion.div variants={modalVariants} className="modal" style={{ padding: '24px' }}>
-              <div className="modal-header" style={{ paddingBottom: 16, borderBottom: '1px solid var(--color-border-light)', marginBottom: 20 }}>
-                <h3 id="modal-usuario-title" style={{ fontSize: 18, fontWeight: 800 }}>{editando ? 'Editar Usuario' : 'Crear Nuevo Usuario'}</h3>
-                <button className="modal-close" onClick={()=>setModal(false)}><IconX width={16} height={16}/></button>
-              </div>
-              <div className="modal-body">
-                <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-                  {[
-                    { id:'m-nombre',   label:'Nombre completo', key:'nombre',    type:'text',     req:true,    ph:'Nombre del usuario' },
-                    { id:'m-usuario',  label:'Nombre de usuario', key:'usuario', type:'text',     req:true,    ph:'login_usuario' },
-                    { id:'m-pass',     label:'Contraseña',      key:'contrasena',type:'password', req:!editando, ph: editando?'Dejar vacío para mantener':'Nueva contraseña' },
-                    { id:'m-confirmar',label:'Confirmar contraseña', key:'confirmar', type:'password', req:false, ph:'Repetir contraseña' },
-                  ].map(({ id, label, key, type, req, ph }) => (
-                    <div className="form-group" key={key}>
-                      <label className="form-label" htmlFor={id}>{label}{req && <span className="required">*</span>}</label>
-                      <input id={id} type={type} className={`form-control${errs[key]?' error':''}`} value={form[key]} onChange={sf(key)} placeholder={ph} />
-                      <AnimatePresence>
-                        {errs[key] && <motion.span initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="form-error"><IconAlert width={12} height={12}/>{errs[key]}</motion.span>}
-                      </AnimatePresence>
-                    </div>
-                  ))}
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="m-rol">Rol de acceso</label>
-                    <select id="m-rol" className="form-control" value={form.rol} onChange={sf('rol')}>
-                      {ROLES.map(r=><option key={r}>{r}</option>)}
-                    </select>
-                  </div>
-                  {editando && (
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="m-estado">Estado</label>
-                      <select id="m-estado" className="form-control" value={form.estado} onChange={sf('estado')}>
-                        <option>Activo</option><option>Inactivo</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="modal-footer" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--color-border-light)' }}>
-                <button className="btn btn-ghost" onClick={()=>setModal(false)}>Cancelar</button>
-                <button className="btn btn-primary" id="btn-guardar-usuario" onClick={guardar}>
-                  {editando ? 'Actualizar' : 'Crear Usuario'}
-                </button>
-              </div>
-            </motion.div>
+        {message && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto', marginBottom: 18 }} exit={{ opacity: 0, height: 0 }} 
+            className={`alert alert-${message.type === 'success' ? 'success' : 'danger'}`} style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+            {message.type === 'success' ? <IconCheck width={18} height={18} /> : <IconAlert width={18} height={18} />}
+            <strong style={{ fontSize: 13.5 }}>{message.text}</strong>
           </motion.div>
         )}
+      </AnimatePresence>
 
-        {confirm && (
-          <motion.div variants={overlayVariants} initial="hidden" animate="visible" exit="exit" className="modal-overlay" role="alertdialog" aria-modal="true">
-            <motion.div variants={modalVariants} className="modal" style={{ maxWidth:420, padding: 24 }}>
-              <div className="modal-header" style={{ paddingBottom: 16, borderBottom: '1px solid var(--color-border-light)', marginBottom: 20 }}>
-                <h3 style={{ fontSize: 18, fontWeight: 800 }}>Confirmar Eliminación</h3>
-                <button className="modal-close" onClick={()=>setConfirm(null)}><IconX width={16} height={16}/></button>
+      <motion.div variants={itemVariants} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre Completo</th>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th style={{ textAlign: 'right' }}>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usuarios.length === 0 ? (
+              <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: 'var(--color-text-muted)' }}>No hay usuarios registrados.</td></tr>
+            ) : usuarios.map(u => (
+              <tr key={u.id}>
+                <td style={{ color: 'var(--color-text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)' }}>#{u.id}</td>
+                <td style={{ fontWeight: 600 }}>{u.nombre}</td>
+                <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{u.usuario}</td>
+                <td><span className="badge badge-neutral">{u.rol}</span></td>
+                <td>
+                  <span className={`badge ${u.estado === 'Activo' ? 'badge-success' : 'badge-danger'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }}></span>
+                    {u.estado}
+                  </span>
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <button className="btn btn-ghost" style={{ padding: 6, marginRight: 4 }} onClick={() => handleEdit(u)} title="Editar Usuario">
+                    <IconEdit width={16} height={16} />
+                  </button>
+                  <button className="btn btn-ghost" style={{ padding: 6, color: 'var(--color-danger)' }} onClick={() => handleDelete(u.id, u.rol)} title="Eliminar Usuario">
+                    <IconTrash width={16} height={16} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </motion.div>
+
+      {/* Modal CRUD */}
+      <AnimatePresence>
+        {showModal && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-backdrop" onClick={() => setShowModal(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="card" style={{ position: 'relative', width: '100%', maxWidth: 500, margin: 'auto', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+              <div className="card-header" style={{ padding: '20px 24px' }}>
+                <h2 style={{ fontSize: 18 }}><div className="card-header-icon"><IconShield width={18} height={18} /></div> {isEdit ? 'Editar Usuario' : 'Nuevo Usuario'}</h2>
               </div>
-              <div className="modal-body">
-                <div className="alert alert-danger" style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <IconAlert width={18} height={18} style={{ flexShrink: 0, marginTop: 2 }}/>
-                  <span>Esta acción eliminará el usuario permanentemente del sistema y no puede deshacerse. ¿Está seguro de continuar?</span>
-                </div>
-              </div>
-              <div className="modal-footer" style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--color-border-light)' }}>
-                <button className="btn btn-ghost" onClick={()=>setConfirm(null)}>Cancelar</button>
-                <button className="btn btn-danger" onClick={()=>eliminar(confirm)}>
-                  <IconTrash width={14} height={14}/> Sí, Eliminar
-                </button>
+              <div className="card-body" style={{ padding: '24px', overflowY: 'auto' }}>
+                <form onSubmit={handleSubmit} noValidate>
+                  <div className="form-group full">
+                    <label className="form-label">Nombre Completo <span className="required">*</span></label>
+                    <input name="nombre" type="text" className={cls('nombre')} value={form.nombre} onChange={handleChange} onBlur={handleBlur} />
+                    {touched.nombre && errors.nombre && <span className="form-error"><IconAlert width={12} height={12}/>{errors.nombre}</span>}
+                  </div>
+                  
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label className="form-label">Usuario de Login <span className="required">*</span></label>
+                      <input name="usuario" type="text" className={cls('usuario')} value={form.usuario} onChange={handleChange} onBlur={handleBlur} autoComplete="off" />
+                      {touched.usuario && errors.usuario && <span className="form-error"><IconAlert width={12} height={12}/>{errors.usuario}</span>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">
+                        Contraseña {isEdit ? '' : <span className="required">*</span>}
+                      </label>
+                      <input name="contrasena" type="password" className={cls('contrasena')} value={form.contrasena} onChange={handleChange} onBlur={handleBlur} placeholder={isEdit ? 'Dejar vacío para no cambiar' : ''} autoComplete="new-password" />
+                      {touched.contrasena && errors.contrasena && <span className="form-error"><IconAlert width={12} height={12}/>{errors.contrasena}</span>}
+                    </div>
+                  </div>
+
+                  <div className="form-grid" style={{ marginTop: 16 }}>
+                    <div className="form-group">
+                      <label className="form-label">Rol del Sistema</label>
+                      <select name="rol" className="form-control" value={form.rol} onChange={handleChange}>
+                        <option>Administrador</option>
+                        <option>Médico</option>
+                        <option>Enfermería</option>
+                        <option>Recepcionista</option>
+                        <option>Laboratorista</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Estado</label>
+                      <select name="estado" className="form-control" value={form.estado} onChange={handleChange}>
+                        <option>Activo</option>
+                        <option>Inactivo</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-actions" style={{ marginTop: 32, justifyContent: 'flex-end', paddingTop: 20, borderTop: '1px solid var(--color-border)' }}>
+                    <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancelar</button>
+                    <button type="submit" className="btn btn-primary" disabled={saving}>
+                      <IconSave width={14} height={14} /> {saving ? 'Guardando...' : 'Guardar Usuario'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </motion.div>

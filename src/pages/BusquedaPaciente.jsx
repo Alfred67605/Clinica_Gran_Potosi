@@ -20,7 +20,7 @@ function getPriorityBadge(prioridad) {
   return <span className={`badge ${p.cls}`}>{p.label}</span>;
 }
 
-export default function BusquedaPaciente({ pacientes, onNavigate, setPacienteSeleccionadoId }) {
+export default function BusquedaPaciente({ pacientes, onNavigate, setPacienteSeleccionadoId, currentUser }) {
   const [query,   setQuery]   = useState('');
   const [filterBy,setFilterBy]= useState('nombre');
   const [estado,  setEstado]  = useState('todos');
@@ -180,15 +180,21 @@ export default function BusquedaPaciente({ pacientes, onNavigate, setPacienteSel
                       <td><span className={`badge ${p.estado==='Activo'?'badge-success':'badge-neutral'}`}>{p.estado}</span></td>
                       <td>
                         <div style={{ display:'flex', gap:6 }}>
-                          <button className="btn btn-primary btn-sm" onClick={()=>{ setPacienteSeleccionadoId(p.id); onNavigate('historial'); }} title="Ver historial">
-                            <IconEye width={13} height={13}/> Historial
-                          </button>
-                          <button className="btn btn-success btn-sm" onClick={()=>{ setPacienteSeleccionadoId(p.id); onNavigate('registroClinico'); }} title="Nueva Consulta">
-                            <IconClipboard width={13} height={13}/> Consulta
-                          </button>
-                          <button className="btn btn-ghost btn-sm" onClick={()=>{ setPacienteSeleccionadoId(p.id); onNavigate('actualizacion'); }} title="Editar datos">
-                            <IconEdit width={13} height={13}/> Editar
-                          </button>
+                          {['Administrador', 'Médico', 'Enfermería'].includes(currentUser?.rol) && (
+                            <button className="btn btn-primary btn-sm" onClick={()=>{ setPacienteSeleccionadoId(p.id); onNavigate('historial'); }} title="Ver historial">
+                              <IconEye width={13} height={13}/> Historial
+                            </button>
+                          )}
+                          {['Administrador', 'Médico', 'Enfermería'].includes(currentUser?.rol) && (
+                            <button className="btn btn-success btn-sm" onClick={()=>{ setPacienteSeleccionadoId(p.id); onNavigate('registroClinico'); }} title="Nueva Consulta">
+                              <IconClipboard width={13} height={13}/> Consulta
+                            </button>
+                          )}
+                          {['Administrador', 'Médico', 'Recepcionista'].includes(currentUser?.rol) && (
+                            <button className="btn btn-ghost btn-sm" onClick={()=>{ setPacienteSeleccionadoId(p.id); onNavigate('actualizacion'); }} title="Editar datos">
+                              <IconEdit width={13} height={13}/> Editar
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>

@@ -1,10 +1,11 @@
 /**
  * RegistroPaciente.jsx — Premium Patient Registration
- * Smooth validation transitions, staggered form grids, visual feedback alerts.
+ * Conectado al backend Laravel para persistencia en PostgreSQL.
  */
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconSave, IconUser, IconCheck, IconAlert, IconX } from '../components/Icons';
+import { crearPaciente } from '../services/api';
 
 const INITIAL = { nombre:'', ci:'', telefono:'', direccion:'', fechaNacimiento:'', sexo:'', tipoSangre:'' };
 
@@ -19,11 +20,12 @@ function validate(f) {
   return e;
 }
 
-export default function RegistroPaciente({ pacientes, setPacientes, onNavigate }) {
+export default function RegistroPaciente({ reloadPacientes, onNavigate }) {
   const [form, setForm]       = useState(INITIAL);
   const [errors, setErrors]   = useState({});
   const [touched, setTouched] = useState({});
   const [saved, setSaved]     = useState(false);
+  const [saving, setSaving]   = useState(false);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -38,67 +40,42 @@ export default function RegistroPaciente({ pacientes, setPacientes, onNavigate }
     setErrors(p => ({ ...p, [name]: validate(form)[name] }));
   }
   
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const allTouched = Object.keys(INITIAL).reduce((a,k) => ({ ...a,[k]:true }), {});
     setTouched(allTouched);
     const errs = validate(form);
     setErrors(errs);
     if (!Object.keys(errs).length) {
-      const nuevoId = pacientes.length > 0 ? Math.max(...pacientes.map(p => p.id)) + 1 : 1;
-      
-      const birthDate = new Date(form.fechaNacimiento);
-      const difference = Date.now() - birthDate.getTime();
-      const ageDate = new Date(difference);
-      const calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970);
+      try {
+        setSaving(true);
+        await crearPaciente({
+          nombre: form.nombre.trim(),
+          ci: form.ci.trim(),
+          telefono: form.telefono.trim(),
+          direccion: form.direccion.trim(),
+          fecha_nacimiento: form.fechaNacimiento,
+          sexo: form.sexo,
+          tipo_sangre: form.tipoSangre || 'O+',
+          estado_civil: 'Soltero/a',
+          ciudad: 'Potosí',
+        });
 
-      const nuevoPaciente = {
-        id: nuevoId,
-        nombre: form.nombre.trim(),
-        ci: form.ci.trim(),
-        telefono: form.telefono.trim(),
-        direccion: form.direccion.trim(),
-        fechaNacimiento: form.fechaNacimiento,
-        edad: isNaN(calculatedAge) ? 0 : calculatedAge,
-        sexo: form.sexo,
-        tipoSangre: form.tipoSangre || 'O+',
-        estadoCivil: 'Soltero/a',
-        ciudad: 'Potosí',
-        correo: '',
-        contactoEmergencia: '',
-        peso: '',
-        altura: '',
-        imc: '',
-        presionArterial: '',
-        frecuenciaCardiaca: '',
-        temperatura: '',
-        saturacionOxigeno: '',
-        alergias: 'Ninguna',
-        enfermedadesPrevias: '',
-        medicamentosActuales: '',
-        antecedentesFamiliares: '',
-        historialQuirurgico: '',
-        observacionesGenerales: '',
-        diagnosticoPreliminar: '',
-        diagnosticoFinal: '',
-        tratamiento: '',
-        indicacionesMedicas: '',
-        fechaIngreso: new Date().toISOString().slice(0, 10),
-        doctorAsignado: 'Dr. Roberto López',
-        areaMedica: 'Consulta General',
-        prioridadMedica: 'Baja',
-        estado: 'Activo',
-        historialConsultas: []
-      };
+        // Recargar pacientes desde el backend
+        if (reloadPacientes) await reloadPacientes();
 
-      setPacientes([...pacientes, nuevoPaciente]);
-      setSaved(true);
-      setTimeout(() => { 
-        setSaved(false); 
-        setForm(INITIAL); 
-        setTouched({}); 
-        setErrors({}); 
-      }, 3000);
+        setSaved(true);
+        setTimeout(() => { 
+          setSaved(false); 
+          setForm(INITIAL); 
+          setTouched({}); 
+          setErrors({}); 
+        }, 3000);
+      } catch (err) {
+        setErrors({ general: err.message });
+      } finally {
+        setSaving(false);
+      }
     }
   }
 
@@ -137,7 +114,19 @@ export default function RegistroPaciente({ pacientes, setPacientes, onNavigate }
             style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}
           >
             <IconCheck width={18} height={18} />
-            <strong style={{ fontSize: 13.5 }}>Paciente registrado correctamente.</strong> El formulario se reiniciará en breve.
+            <strong style={{ fontSize: 13.5 }}>Paciente registrado correctamente en la base de datos.</strong> El formulario se reiniciará en breve.
+          </motion.div>
+        )}
+        {errors.general && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }} 
+            animate={{ opacity: 1, height: 'auto', marginBottom: 18 }} 
+            exit={{ opacity: 0, height: 0 }}
+            className="alert alert-danger"
+            style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}
+          >
+            <IconAlert width={18} height={18} />
+            <strong style={{ fontSize: 13.5 }}>Error: {errors.general}</strong>
           </motion.div>
         )}
       </AnimatePresence>
@@ -270,8 +259,8 @@ export default function RegistroPaciente({ pacientes, setPacientes, onNavigate }
                 onClick={() => { setForm(INITIAL); setErrors({}); setTouched({}); }}>
                 <IconX width={14} height={14} /> Limpiar Formulario
               </button>
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-primary btn-lg">
-                <IconSave width={15} height={15} /> Guardar Paciente
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-primary btn-lg" disabled={saving}>
+                <IconSave width={15} height={15} /> {saving ? 'Guardando...' : 'Guardar Paciente'}
               </motion.button>
             </div>
           </form>

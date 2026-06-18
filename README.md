@@ -11,9 +11,12 @@ Sigue estos pasos para poner en marcha el proyecto en tu entorno local:
 ### Requisitos Previos
 - **Node.js** (versión 18 o superior recomendada)
 - **npm** (incluido con Node.js)
+- **PHP** (versión 8.1 o superior)
+- **Composer** (gestor de dependencias de PHP)
+- **MySQL/MariaDB** (o el motor de base de datos de tu preferencia)
 
-### Instalación mediante Git (Clonación)
-Para clonar el repositorio en otra computadora, ejecuta los siguientes comandos en tu terminal:
+### Instalación en una nueva PC (Clonación)
+Sigue estos pasos para levantar el proyecto completo (Frontend y Backend) en otra computadora:
 
 1. Clona el repositorio desde GitHub:
    ```bash
@@ -23,20 +26,49 @@ Para clonar el repositorio en otra computadora, ejecuta los siguientes comandos 
    ```bash
    cd Clinica_Gran_Potosi
    ```
-3. Instala las dependencias necesarias:
+
+#### Configuración del Backend (Laravel)
+1. Navega a la carpeta del backend:
+   ```bash
+   cd backend
+   ```
+2. Instala las dependencias de PHP usando Composer:
+   ```bash
+   composer install
+   ```
+3. Copia el archivo de configuración de entorno:
+   ```bash
+   cp .env.example .env
+   ```
+4. Configura tu base de datos en el archivo `.env` recientemente creado (variables `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).
+5. Genera la clave de la aplicación:
+   ```bash
+   php artisan key:generate
+   ```
+6. Ejecuta las migraciones y los seeders para poblar la base de datos:
+   ```bash
+   php artisan migrate:fresh --seed
+   ```
+7. Inicia el servidor de desarrollo del backend:
+   ```bash
+   php artisan serve
+   ```
+El backend estará disponible en `http://localhost:8000`.
+
+#### Configuración del Frontend (React + Vite)
+1. Abre una **nueva terminal** y asegúrate de estar en la raíz del proyecto (`Clinica_Gran_Potosi`).
+2. Instala las dependencias necesarias:
    ```bash
    npm install
    ```
-
-### Desarrollo
-Para iniciar el servidor de desarrollo con recarga en tiempo real:
-```bash
-npm run dev
-```
-La aplicación estará disponible en `http://localhost:5173` (o el puerto que indique la terminal).
+3. Inicia el servidor de desarrollo del frontend:
+   ```bash
+   npm run dev
+   ```
+El frontend estará disponible en `http://localhost:5173`.
 
 ### Producción
-Para generar el bundle optimizado para producción:
+Para generar el bundle optimizado para producción del frontend, en la raíz del proyecto ejecuta:
 ```bash
 npm run build
 ```

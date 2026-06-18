@@ -1,10 +1,11 @@
 /**
  * ActualizacionDatos.jsx — Premium Data Edit
- * Animated modified indicators, staggered grids, hover states, and smooth transitions.
+ * Conectado al backend Laravel para persistencia en PostgreSQL.
  */
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconEdit, IconSave, IconRefresh, IconAlert, IconCheck } from '../components/Icons';
+import { actualizarPaciente } from '../services/api';
 
 function validate(f) {
   const e = {};
@@ -18,13 +19,14 @@ function validate(f) {
 
 const INITIAL_FORM = { nombre: '', ci: '', telefono: '', direccion: '', fechaNacimiento: '', sexo: '', tipoSangre: 'O+' };
 
-export default function ActualizacionDatos({ pacientes, setPacientes, pacienteSeleccionadoId, onNavigate }) {
+export default function ActualizacionDatos({ pacientes, reloadPacientes, pacienteSeleccionadoId, onNavigate }) {
   const original = pacientes.find(p => p.id === pacienteSeleccionadoId) || pacientes[0];
 
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (original) {
@@ -71,7 +73,7 @@ export default function ActualizacionDatos({ pacientes, setPacientes, pacienteSe
     setErrors(p => ({ ...p, [name]: validate(form)[name] }));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const all = Object.keys(form).reduce((a, k) => ({ ...a, [k]: true }), {});
     setTouched(all);
@@ -79,24 +81,27 @@ export default function ActualizacionDatos({ pacientes, setPacientes, pacienteSe
     setErrors(errs);
     
     if (!Object.keys(errs).length) {
-      const birthDate = new Date(form.fechaNacimiento);
-      const difference = Date.now() - birthDate.getTime();
-      const ageDate = new Date(difference);
-      const calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970);
+      try {
+        setSaving(true);
+        await actualizarPaciente(original.id, {
+          nombre: form.nombre.trim(),
+          ci: form.ci.trim(),
+          telefono: form.telefono.trim(),
+          direccion: form.direccion.trim(),
+          fecha_nacimiento: form.fechaNacimiento,
+          sexo: form.sexo,
+          tipo_sangre: form.tipoSangre,
+        });
 
-      const updatedPacientes = pacientes.map(p => 
-        p.id === original.id 
-          ? { 
-              ...p, 
-              ...form, 
-              edad: isNaN(calculatedAge) ? p.edad : calculatedAge 
-            } 
-          : p
-      );
-      
-      setPacientes(updatedPacientes);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 4000);
+        if (reloadPacientes) await reloadPacientes();
+
+        setSaved(true);
+        setTimeout(() => setSaved(false), 4000);
+      } catch (err) {
+        setErrors({ general: err.message });
+      } finally {
+        setSaving(false);
+      }
     }
   }
 
@@ -153,7 +158,12 @@ export default function ActualizacionDatos({ pacientes, setPacientes, pacienteSe
       <AnimatePresence>
         {saved && (
           <motion.div initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto', marginBottom: 16 }} exit={{ opacity: 0, y: -10, height: 0 }} className="alert alert-success" style={{ overflow: 'hidden' }}>
-            <IconCheck width={16} height={16} /> Datos del paciente actualizados correctamente en el sistema.
+            <IconCheck width={16} height={16} /> Datos del paciente actualizados correctamente en la base de datos.
+          </motion.div>
+        )}
+        {errors.general && (
+          <motion.div initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto', marginBottom: 16 }} exit={{ opacity: 0, y: -10, height: 0 }} className="alert alert-danger" style={{ overflow: 'hidden' }}>
+            <IconAlert width={16} height={16} /> Error: {errors.general}
           </motion.div>
         )}
         {hasChanges && !saved && (
@@ -283,8 +293,8 @@ export default function ActualizacionDatos({ pacientes, setPacientes, pacienteSe
               <button type="button" className="btn btn-ghost" onClick={handleRevert} disabled={!hasChanges}>
                 <IconRefresh width={14} height={14} /> Revertir cambios
               </button>
-              <motion.button whileHover={hasChanges ? { scale: 1.02 } : {}} whileTap={hasChanges ? { scale: 0.98 } : {}} type="submit" className="btn btn-success btn-lg" disabled={!hasChanges}>
-                <IconSave width={15} height={15} /> Actualizar Datos
+              <motion.button whileHover={hasChanges ? { scale: 1.02 } : {}} whileTap={hasChanges ? { scale: 0.98 } : {}} type="submit" className="btn btn-success btn-lg" disabled={!hasChanges || saving}>
+                <IconSave width={15} height={15} /> {saving ? 'Guardando...' : 'Actualizar Datos'}
               </motion.button>
             </div>
           </form>

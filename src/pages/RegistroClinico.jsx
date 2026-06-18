@@ -1,468 +1,343 @@
 /**
- * RegistroClinico.jsx — Premium Clinical Module
- * Fully animated step transitions, dynamic tab indicators, auto-calculating fields, print layouts.
+ * RegistroClinico.jsx — Premium Clinical Record
+ * Conectado al backend Laravel.
  */
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  IconClipboard, IconUser, IconCheck, IconAlert, 
-  IconX, IconPrint, IconSave, IconSearch, IconActivity
-} from '../components/Icons';
+import { IconSave, IconUser, IconStethoscope, IconActivity, IconCheck, IconAlert } from '../components/Icons';
+import { crearConsulta } from '../services/api';
 
-const AREAS_MEDICAS = [
-  'Consulta General', 'Cardiología', 'Endocrinología', 'Pediatría',
-  'Ginecología', 'Neumología', 'Odontología', 'Traumatología'
-];
-
-const INITIAL_FORM = {
-  nombre: '', ci: '', fechaNacimiento: '', edad: '', sexo: '', estadoCivil: 'Soltero/a',
-  direccion: '', ciudad: 'Potosí', telefono: '', correo: '', contactoEmergencia: '',
-  peso: '', altura: '', imc: '', tipoSangre: '', frecuenciaCardiaca: '',
-  presionArterial: '', temperatura: '', saturacionOxigeno: '', alergias: '',
-  enfermedadesPrevias: '', medicamentosActuales: '', antecedentesFamiliares: '',
-  historialQuirurgico: '', observacionesGenerales: '', diagnosticoPreliminar: '',
-  diagnosticoFinal: '', tratamiento: '', indicacionesMedicas: '',
-  fechaIngreso: new Date().toISOString().slice(0, 10), doctorAsignado: 'Dr. Roberto López',
-  areaMedica: 'Consulta General', estado: 'Activo', prioridadMedica: 'Baja'
+const INITIAL = {
+  fecha: new Date().toISOString().split('T')[0],
+  hora: new Date().toTimeString().split(' ')[0].substring(0,5),
+  doctor: 'Dr. Roberto López',
+  tipo: 'Consulta General',
+  area: 'Medicina General',
+  prioridad: 'Baja',
+  sintomas: '',
+  diagnosticoPreliminar: '',
+  diagnosticoFinal: '',
+  tratamiento: '',
+  indicaciones: '',
+  peso: '',
+  altura: '',
+  presion: '',
+  fc: '',
+  temp: '',
+  spo2: ''
 };
 
-export default function RegistroClinico({ pacientes, setPacientes, pacienteSeleccionadoId, setPacienteSeleccionadoId, onNavigate }) {
-  const [form, setForm] = useState(INITIAL_FORM);
-  const [activeTab, setActiveTab] = useState('personales');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [saved, setSaved] = useState(false);
-  const [printData, setPrintData] = useState(null);
+function validate(f) {
+  const e = {};
+  if (!f.fecha) e.fecha = 'Fecha requerida.';
+  if (!f.hora) e.hora = 'Hora requerida.';
+  if (!f.doctor) e.doctor = 'Doctor requerido.';
+  if (!f.diagnosticoFinal.trim()) e.diagnosticoFinal = 'El diagnóstico final es obligatorio.';
+  if (!f.tratamiento.trim()) e.tratamiento = 'El tratamiento es obligatorio.';
+  
+  if (f.peso && (isNaN(f.peso) || f.peso < 0 || f.peso > 300)) e.peso = 'Peso inválido.';
+  if (f.altura && (isNaN(f.altura) || f.altura < 0 || f.altura > 3)) e.altura = 'Altura inválida.';
+  if (f.presion && !/^\d{2,3}\/\d{2,3}$/.test(f.presion)) e.presion = 'Formato inválido (Ej: 120/80).';
+  return e;
+}
 
-  useEffect(() => {
-    if (pacienteSeleccionadoId) {
-      const selected = pacientes.find(p => p.id === pacienteSeleccionadoId);
-      if (selected) {
-        setForm(prev => ({
-          ...prev, ...selected,
-          peso: selected.peso || '', altura: selected.altura || '', imc: selected.imc || '',
-          frecuenciaCardiaca: selected.frecuenciaCardiaca || '', presionArterial: selected.presionArterial || '',
-          temperatura: selected.temperatura || '', saturacionOxigeno: selected.saturacionOxigeno || '',
-          diagnosticoPreliminar: '', diagnosticoFinal: '', tratamiento: '', indicacionesMedicas: '',
-          fechaIngreso: new Date().toISOString().slice(0, 10)
-        }));
-        setSearchQuery(selected.nombre);
+export default function RegistroClinico({ pacientes, reloadPacientes, pacienteSeleccionadoId, usuarios }) {
+  const paciente = pacientes.find(p => p.id === pacienteSeleccionadoId) || pacientes[0];
+  const [form, setForm] = useState(INITIAL);
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  if (!paciente) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+        <IconAlert width={48} height={48} style={{ margin: '0 auto 16px', display: 'block', color: 'var(--color-warning)' }} />
+        <h3 style={{ marginBottom: 8 }}>No hay pacientes disponibles</h3>
+        <p style={{ fontSize: 13.5 }}>Debe registrar un paciente antes de poder añadir consultas clínicas.</p>
+      </div>
+    );
+  }
+
+  const medicos = usuarios.filter(u => u.rol === 'Médico' && u.estado === 'Activo');
+
+  function handleChange(e) {
+    const { name, value } = e.target;
+    const u = { ...form, [name]: value };
+    setForm(u);
+    if (touched[name]) setErrors(p => ({ ...p, [name]: validate(u)[name] }));
+  }
+
+  function handleBlur(e) {
+    const { name } = e.target;
+    setTouched(p => ({ ...p, [name]: true }));
+    setErrors(p => ({ ...p, [name]: validate(form)[name] }));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const all = Object.keys(INITIAL).reduce((a, k) => ({ ...a, [k]: true }), {});
+    setTouched(all);
+    const errs = validate(form);
+    setErrors(errs);
+    
+    if (!Object.keys(errs).length) {
+      try {
+        setSaving(true);
+        const imcCalc = (form.peso && form.altura) ? (parseFloat(form.peso) / (parseFloat(form.altura) ** 2)).toFixed(2) : null;
+        
+        // Encontrar ID del médico seleccionado
+        const medicoSeleccionado = medicos.find(m => m.nombre === form.doctor) || medicos[0];
+
+        await crearConsulta({
+          id_paciente: paciente.id,
+          id_usuario: medicoSeleccionado ? medicoSeleccionado.id : 1, // Fallback al ID 1
+          fecha_hora: `${form.fecha} ${form.hora}:00`,
+          tipo_consulta: form.tipo,
+          area_medica: form.area,
+          prioridad_medica: form.prioridad,
+          sintomas_observados: form.sintomas.trim() || null,
+          diagnostico_preliminar: form.diagnosticoPreliminar.trim() || null,
+          diagnostico_final: form.diagnosticoFinal.trim(),
+          tratamiento: form.tratamiento.trim(),
+          indicaciones_medicas: form.indicaciones.trim() || null,
+          peso: form.peso ? parseFloat(form.peso) : null,
+          altura: form.altura ? parseFloat(form.altura) : null,
+          imc: imcCalc,
+          presion_arterial: form.presion || null,
+          frecuencia_cardiaca: form.fc ? parseInt(form.fc, 10) : null,
+          temperatura: form.temp ? parseFloat(form.temp) : null,
+          saturacion_oxigeno: form.spo2 ? parseInt(form.spo2, 10) : null,
+        });
+
+        if (reloadPacientes) await reloadPacientes();
+
+        setSaved(true);
+        setTimeout(() => {
+          setSaved(false);
+          setForm(INITIAL);
+          setTouched({});
+          setErrors({});
+        }, 3000);
+      } catch (err) {
+        setErrors({ general: err.message });
+      } finally {
+        setSaving(false);
       }
     }
-  }, [pacienteSeleccionadoId, pacientes]);
-
-  useEffect(() => {
-    const pesoNum = parseFloat(form.peso);
-    const alturaNum = parseFloat(form.altura);
-    if (pesoNum && alturaNum && alturaNum > 0) {
-      setForm(prev => ({ ...prev, imc: (pesoNum / (alturaNum * alturaNum)).toFixed(2) }));
-    } else {
-      setForm(prev => ({ ...prev, imc: '' }));
-    }
-  }, [form.peso, form.altura]);
-
-  useEffect(() => {
-    if (form.fechaNacimiento) {
-      const birthDate = new Date(form.fechaNacimiento);
-      const calculatedAge = Math.abs(new Date(Date.now() - birthDate.getTime()).getUTCFullYear() - 1970);
-      if (!isNaN(calculatedAge)) setForm(prev => ({ ...prev, edad: calculatedAge }));
-    }
-  }, [form.fechaNacimiento]);
-
-  const suggestions = searchQuery.trim() !== ''
-    ? pacientes.filter(p => p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) || p.ci.includes(searchQuery))
-    : [];
-
-  function handleSelectPatient(p) {
-    setForm(prev => ({
-      ...prev, ...p,
-      peso: p.peso || '', altura: p.altura || '', imc: p.imc || '',
-      frecuenciaCardiaca: p.frecuenciaCardiaca || '', presionArterial: p.presionArterial || '',
-      temperatura: p.temperatura || '', saturacionOxigeno: p.saturacionOxigeno || '',
-      diagnosticoPreliminar: '', diagnosticoFinal: '', tratamiento: '', indicacionesMedicas: '',
-      fechaIngreso: new Date().toISOString().slice(0, 10)
-    }));
-    setPacienteSeleccionadoId(p.id);
-    setSearchQuery(p.nombre);
-    setShowSuggestions(false);
   }
 
-  function handleInputChange(e) {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
+  function cls(name) {
+    if (touched[name] && errors[name]) return 'form-control error';
+    if (touched[name] && !errors[name] && form[name]) return 'form-control modified';
+    return 'form-control';
   }
 
-  function getImcCategory(imcValue) {
-    const val = parseFloat(imcValue);
-    if (isNaN(val)) return { text: '—', color: 'var(--color-text-muted)' };
-    if (val < 18.5) return { text: 'Bajo peso', color: 'var(--color-warning)' };
-    if (val >= 18.5 && val <= 24.9) return { text: 'Normal', color: 'var(--color-success)' };
-    if (val >= 25 && val <= 29.9) return { text: 'Sobrepeso', color: 'var(--color-warning)' };
-    return { text: 'Obesidad', color: 'var(--color-danger)' };
-  }
-
-  const imcCat = getImcCategory(form.imc);
-
-  function validateForm() {
-    const errs = {};
-    if (!form.nombre.trim()) errs.nombre = 'El nombre es obligatorio.';
-    if (!form.ci.trim()) errs.ci = 'El documento CI es obligatorio.';
-    if (!form.diagnosticoFinal.trim()) errs.diagnosticoFinal = 'Requerido para registro clínico.';
-    if (!form.tratamiento.trim()) errs.tratamiento = 'El plan de tratamiento es requerido.';
-    return errs;
-  }
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    const errs = validateForm();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      if (errs.nombre || errs.ci) setActiveTab('personales');
-      else setActiveTab('consulta');
-      return;
-    }
-
-    const nuevaConsulta = {
-      fecha: new Date(form.fechaIngreso).toLocaleDateString('es-BO') || new Date().toLocaleDateString('es-BO'),
-      tipo: 'Consulta Especialidad',
-      medico: form.doctorAsignado,
-      areaMedica: form.areaMedica,
-      diagnostico: form.diagnosticoFinal,
-      tratamiento: form.tratamiento,
-      indicaciones: form.indicacionesMedicas,
-      sintomas: form.diagnosticoPreliminar || 'Control clínico',
-      presionArterial: form.presionArterial,
-      peso: parseFloat(form.peso),
-      altura: parseFloat(form.altura),
-      imc: parseFloat(form.imc),
-      frecuenciaCardiaca: parseInt(form.frecuenciaCardiaca, 10),
-      temperatura: parseFloat(form.temperatura),
-      saturacionOxigeno: parseInt(form.saturacionOxigeno, 10),
-      prioridad: form.prioridadMedica,
-      estadoClinico: form.estado
-    };
-
-    let updatedPacientes = [];
-    const targetIdx = pacientes.findIndex(p => p.ci === form.ci);
-
-    if (targetIdx !== -1) {
-      const pacienteExistente = pacientes[targetIdx];
-      const pacienteActualizado = {
-        ...pacienteExistente, ...form,
-        historialConsultas: [nuevaConsulta, ...(pacienteExistente.historialConsultas || [])],
-        id: pacienteExistente.id
-      };
-      updatedPacientes = pacientes.map((p, idx) => idx === targetIdx ? pacienteActualizado : p);
-      setPacienteSeleccionadoId(pacienteExistente.id);
-    } else {
-      const nuevoId = pacientes.length > 0 ? Math.max(...pacientes.map(p => p.id)) + 1 : 1;
-      updatedPacientes = [...pacientes, { ...form, id: nuevoId, historialConsultas: [nuevaConsulta] }];
-      setPacienteSeleccionadoId(nuevoId);
-    }
-
-    setPacientes(updatedPacientes);
-    setPrintData({ ...form, consulta: nuevaConsulta });
-    setSaved(true);
-  }
-
-  function handleReset() {
-    setForm(INITIAL_FORM); setSearchQuery(''); setSaved(false);
-    setPrintData(null); setErrors({}); setActiveTab('personales');
-    setPacienteSeleccionadoId(null);
-  }
-
-  const filledFields = [
-    form.nombre, form.ci, form.fechaNacimiento, form.sexo, form.telefono,
-    form.peso, form.altura, form.presionArterial, form.frecuenciaCardiaca,
-    form.alergias, form.diagnosticoPreliminar, form.diagnosticoFinal,
-    form.tratamiento, form.doctorAsignado, form.areaMedica
-  ].filter(val => val !== undefined && val !== '').length;
-  const progressPercent = Math.min(Math.round((filledFields / 15) * 100), 100);
-
-  const tabs = [
-    { id: 'personales', label: 'Datos Personales', icon: IconUser },
-    { id: 'fisicos', label: 'Constantes Físicas', icon: IconActivity },
-    { id: 'antecedentes', label: 'Antecedentes', icon: IconClipboard },
-    { id: 'consulta', label: 'Diagnóstico', icon: IconClipboard },
-    { id: 'admin', label: 'Administrativo', icon: IconCheck }
-  ];
-
-  const tabVariants = {
-    hidden: { opacity: 0, x: -15 },
-    visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 120, damping: 14 } },
-    exit: { opacity: 0, x: 15, transition: { duration: 0.15 } }
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.05 } }
+  };
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 120, damping: 14 } }
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', damping: 18 }}>
+    <motion.div variants={containerVariants} initial="hidden" animate="show">
       <div className="page-header">
         <div className="page-header-left">
-          <h1>Registro Clínico Completo</h1>
-          <p>Formulario de consulta médica detallada, constantes fisiológicas y emisión de receta.</p>
+          <h1>Registro Clínico</h1>
+          <p>Añada una nueva consulta médica para el paciente seleccionado.</p>
         </div>
-        <button className="btn btn-ghost" onClick={handleReset}><IconX width={14} height={14}/> Limpiar Formulario</button>
       </div>
 
       <AnimatePresence>
-        {saved && printData && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto', marginBottom: 18 }} exit={{ opacity: 0, height: 0 }} className="alert alert-success" style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <IconCheck width={18} height={18} />
-                <strong style={{ fontSize: 14 }}>¡Consulta y registro clínico guardado exitosamente!</strong>
-              </div>
-              <p style={{ fontSize: 13.5, margin: 0 }}>La información ha sido guardada en la ficha del paciente. Puede imprimir el documento médico oficial.</p>
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                <button className="btn btn-success btn-sm" onClick={() => setTimeout(()=>window.print(), 200)}>
-                  <IconPrint width={14} height={14} /> Imprimir / Exportar PDF
-                </button>
-                <button className="btn btn-primary btn-sm" onClick={() => onNavigate('historial')}>Ver Historial</button>
-              </div>
-            </div>
+        {saved && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto', marginBottom: 18 }} exit={{ opacity: 0, height: 0 }} className="alert alert-success" style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+            <IconCheck width={18} height={18} />
+            <strong style={{ fontSize: 13.5 }}>Consulta registrada exitosamente.</strong> El historial del paciente ha sido actualizado.
+          </motion.div>
+        )}
+        {errors.general && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto', marginBottom: 18 }} exit={{ opacity: 0, height: 0 }} className="alert alert-danger" style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+            <IconAlert width={18} height={18} />
+            <strong style={{ fontSize: 13.5 }}>Error: {errors.general}</strong>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="card" style={{ marginBottom: 18 }}>
-        <div className="card-body" style={{ padding: '16px 24px' }}>
-          <div className="autocomplete-wrapper" style={{ maxWidth: 500 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>
-              Buscar paciente registrado para auto-completar datos:
-            </label>
-            <div className="search-bar" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <IconSearch width={16} height={16} />
-              <input 
-                type="text" value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); setShowSuggestions(true); if(e.target.value==='') setPacienteSeleccionadoId(null); }}
-                onFocus={() => setShowSuggestions(true)}
-                placeholder="Escriba el nombre o CI del paciente..."
-              />
-              {searchQuery && (
-                <button onClick={() => { setSearchQuery(''); setForm(INITIAL_FORM); setPacienteSeleccionadoId(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}>
-                  <IconX width={14} height={14} />
-                </button>
-              )}
-            </div>
-            <AnimatePresence>
-              {showSuggestions && suggestions.length > 0 && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="autocomplete-dropdown" style={{ top: 'calc(100% + 4px)', boxShadow: 'var(--shadow-lg)' }}>
-                  {suggestions.map(p => (
-                    <div key={p.id} className="autocomplete-item" onClick={() => handleSelectPatient(p)}>
-                      <span style={{ fontWeight: 600 }}>{p.nombre}</span>
-                      <div className="autocomplete-item-details">CI: {p.ci} &nbsp;·&nbsp; {p.edad} años</div>
-                    </div>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+      <motion.div variants={itemVariants} className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-light))', color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IconUser width={20} height={20} />
+          </div>
+          <div>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700, marginBottom: 2 }}>Paciente Actual</p>
+            <p style={{ fontWeight: 800, fontSize: 16 }}>{paciente.nombre}</p>
+          </div>
+          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 2 }}>Carnet de Identidad</p>
+            <p style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{paciente.ci}</p>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Animated Progress Bar */}
-      <div className="form-progress-bar" style={{ background: 'var(--color-surface)', padding: '16px 24px', borderRadius: 'var(--radius-lg)', marginBottom: 20, border: '1px solid var(--color-border-light)' }}>
-        <IconClipboard width={18} height={18} style={{ color: 'var(--color-primary)' }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12.5, fontWeight: 700 }}>
-            <span>Completitud del Expediente Médico</span>
-            <span style={{ color: 'var(--color-primary)' }}>{progressPercent}%</span>
-          </div>
-          <div className="progress-track" style={{ height: 8 }}>
-            <motion.div className="progress-fill" initial={{ width: 0 }} animate={{ width: `${progressPercent}%` }} style={{ background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-glow))' }} />
-          </div>
+      <motion.div variants={itemVariants} className="card">
+        <div className="card-header">
+          <h2><div className="card-header-icon"><IconStethoscope width={15} height={15} /></div>Detalles de la Consulta</h2>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="tabs-container" style={{ borderBottom: '2px solid var(--color-border-light)', marginBottom: 24 }}>
-        {tabs.map(tab => (
-          <button 
-            key={tab.id}
-            className={`tab-button${activeTab === tab.id ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-            style={{ padding: '12px 16px', position: 'relative' }}
-          >
-            <tab.icon width={14} height={14} />
-            {tab.label}
-            {activeTab === tab.id && (
-              <motion.div layoutId="tab-indicator" style={{ position: 'absolute', bottom: -2, left: 0, right: 0, height: 2, background: 'var(--color-primary)' }} />
-            )}
-          </button>
-        ))}
-      </div>
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{ padding: '32px' }}>
+        <div className="card-body" style={{ padding: '24px' }}>
           <form onSubmit={handleSubmit} noValidate>
-            <AnimatePresence mode="wait">
-              {activeTab === 'personales' && (
-                <motion.div key="personales" variants={tabVariants} initial="hidden" animate="visible" exit="exit">
-                  <div className="section-divider"><span>Ficha Identificativa</span><hr /></div>
-                  <div className="form-grid">
-                    <div className="form-group full">
-                      <label className="form-label" htmlFor="nombre">Nombre Completo <span className="required">*</span></label>
-                      <input id="nombre" name="nombre" type="text" className={`form-control${errors.nombre ? ' error' : ''}`} value={form.nombre} onChange={handleInputChange} placeholder="Ej: Juan Carlos Mamani" />
-                      {errors.nombre && <span className="form-error"><IconAlert width={12} height={12} />{errors.nombre}</span>}
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="ci">Documento de Identidad <span className="required">*</span></label>
-                      <input id="ci" name="ci" type="text" className={`form-control${errors.ci ? ' error' : ''}`} value={form.ci} onChange={handleInputChange} placeholder="Ej: 7654321" />
-                      {errors.ci && <span className="form-error"><IconAlert width={12} height={12} />{errors.ci}</span>}
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="fechaNacimiento">Fecha de Nacimiento</label>
-                      <input id="fechaNacimiento" name="fechaNacimiento" type="date" className="form-control" value={form.fechaNacimiento} onChange={handleInputChange} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Edad Calculada</label>
-                      <input type="number" className="form-control" value={form.edad} disabled />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="sexo">Sexo Biológico</label>
-                      <select id="sexo" name="sexo" className="form-control" value={form.sexo} onChange={handleInputChange}>
-                        <option value="">— Seleccionar —</option>
-                        <option value="M">Masculino</option><option value="F">Femenino</option>
-                      </select>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'fisicos' && (
-                <motion.div key="fisicos" variants={tabVariants} initial="hidden" animate="visible" exit="exit">
-                  <div className="section-divider"><span>Medidas Antropométricas</span><hr /></div>
-                  <div className="form-grid">
-                    <div className="form-group"><label className="form-label">Peso (Kg)</label><input name="peso" type="number" step="0.1" className="form-control" value={form.peso} onChange={handleInputChange} /></div>
-                    <div className="form-group"><label className="form-label">Altura (m)</label><input name="altura" type="number" step="0.01" className="form-control" value={form.altura} onChange={handleInputChange} /></div>
-                    <div className="form-group">
-                      <label className="form-label">IMC Calculado</label>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                        <input type="text" className="form-control" value={form.imc} disabled style={{ fontWeight: 800 }} />
-                        <span className="badge" style={{ background: imcCat.color, color: 'white', padding: '6px 12px' }}>{imcCat.text}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="section-divider" style={{ marginTop: 24 }}><span>Constantes Vitales</span><hr /></div>
-                  <div className="form-grid">
-                    <div className="form-group"><label className="form-label">Presión Arterial (mmHg)</label><input name="presionArterial" type="text" className="form-control" value={form.presionArterial} onChange={handleInputChange} placeholder="120/80" /></div>
-                    <div className="form-group"><label className="form-label">Frecuencia Cardíaca (lpm)</label><input name="frecuenciaCardiaca" type="number" className="form-control" value={form.frecuenciaCardiaca} onChange={handleInputChange} /></div>
-                    <div className="form-group"><label className="form-label">Temperatura (°C)</label><input name="temperatura" type="number" step="0.1" className="form-control" value={form.temperatura} onChange={handleInputChange} /></div>
-                    <div className="form-group"><label className="form-label">SpO2 (%)</label><input name="saturacionOxigeno" type="number" className="form-control" value={form.saturacionOxigeno} onChange={handleInputChange} /></div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'antecedentes' && (
-                <motion.div key="antecedentes" variants={tabVariants} initial="hidden" animate="visible" exit="exit">
-                  <div className="section-divider"><span>Ficha de Antecedentes</span><hr /></div>
-                  <div style={{ display: 'grid', gap: 16 }}>
-                    <div className="form-group"><label className="form-label">Alergias Conocidas</label><textarea name="alergias" className="form-control" rows="2" value={form.alergias} onChange={handleInputChange} placeholder="Escriba 'Ninguna' si no tiene." /></div>
-                    <div className="form-group"><label className="form-label">Patologías Previas</label><textarea name="enfermedadesPrevias" className="form-control" rows="2" value={form.enfermedadesPrevias} onChange={handleInputChange} /></div>
-                    <div className="form-group"><label className="form-label">Medicación Habitual</label><textarea name="medicamentosActuales" className="form-control" rows="2" value={form.medicamentosActuales} onChange={handleInputChange} /></div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'consulta' && (
-                <motion.div key="consulta" variants={tabVariants} initial="hidden" animate="visible" exit="exit">
-                  <div className="section-divider"><span>Diagnóstico Clínico</span><hr /></div>
-                  <div style={{ display: 'grid', gap: 16 }}>
-                    <div className="form-group"><label className="form-label">Motivo de Consulta</label><textarea name="diagnosticoPreliminar" className="form-control" rows="2" value={form.diagnosticoPreliminar} onChange={handleInputChange} /></div>
-                    <div className="form-group">
-                      <label className="form-label">Diagnóstico Final <span className="required">*</span></label>
-                      <textarea name="diagnosticoFinal" className={`form-control${errors.diagnosticoFinal ? ' error' : ''}`} rows="2" value={form.diagnosticoFinal} onChange={handleInputChange} />
-                      {errors.diagnosticoFinal && <span className="form-error"><IconAlert width={12} height={12} />{errors.diagnosticoFinal}</span>}
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Plan de Tratamiento <span className="required">*</span></label>
-                      <textarea name="tratamiento" className={`form-control${errors.tratamiento ? ' error' : ''}`} rows="3" value={form.tratamiento} onChange={handleInputChange} />
-                      {errors.tratamiento && <span className="form-error"><IconAlert width={12} height={12} />{errors.tratamiento}</span>}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === 'admin' && (
-                <motion.div key="admin" variants={tabVariants} initial="hidden" animate="visible" exit="exit">
-                  <div className="section-divider"><span>Gestión Administrativa</span><hr /></div>
-                  <div className="form-grid">
-                    <div className="form-group"><label className="form-label">Fecha Atención</label><input name="fechaIngreso" type="date" className="form-control" value={form.fechaIngreso} onChange={handleInputChange} /></div>
-                    <div className="form-group"><label className="form-label">Especialidad</label>
-                      <select name="areaMedica" className="form-control" value={form.areaMedica} onChange={handleInputChange}>
-                        {AREAS_MEDICAS.map(a => <option key={a}>{a}</option>)}
-                      </select>
-                    </div>
-                    <div className="form-group"><label className="form-label">Prioridad</label>
-                      <select name="prioridadMedica" className="form-control" value={form.prioridadMedica} onChange={handleInputChange}>
-                        <option value="Baja">Baja</option><option value="Media">Media</option><option value="Alta">Alta</option>
-                      </select>
-                    </div>
-                    <div className="form-group"><label className="form-label">Estado Clínico</label>
-                      <select name="estado" className="form-control" value={form.estado} onChange={handleInputChange}>
-                        <option value="Activo">Estable / Alta</option><option value="Inactivo">Observación</option>
-                      </select>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="form-actions" style={{ marginTop: 40, paddingTop: 20, borderTop: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between' }}>
-              <div>
-                {activeTab !== 'personales' && (
-                  <button type="button" className="btn btn-ghost" onClick={() => {
-                    const idx = tabs.findIndex(t => t.id === activeTab);
-                    if (idx > 0) setActiveTab(tabs[idx - 1].id);
-                  }}>« Anterior</button>
-                )}
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label" htmlFor="fecha">Fecha <span className="required">*</span></label>
+                <input id="fecha" name="fecha" type="date" className={cls('fecha')} value={form.fecha} onChange={handleChange} onBlur={handleBlur} />
+                <AnimatePresence>
+                  {touched.fecha && errors.fecha && <motion.span initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="form-error"><IconAlert width={12} height={12} />{errors.fecha}</motion.span>}
+                </AnimatePresence>
               </div>
-              <div>
-                {activeTab !== 'admin' ? (
-                  <button type="button" className="btn btn-primary" onClick={() => {
-                    const idx = tabs.findIndex(t => t.id === activeTab);
-                    if (idx < tabs.length - 1) setActiveTab(tabs[idx + 1].id);
-                  }}>Siguiente »</button>
-                ) : (
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-success btn-lg">
-                    <IconSave width={15} height={15} /> Guardar Expediente
-                  </motion.button>
-                )}
+              <div className="form-group">
+                <label className="form-label" htmlFor="hora">Hora <span className="required">*</span></label>
+                <input id="hora" name="hora" type="time" className={cls('hora')} value={form.hora} onChange={handleChange} onBlur={handleBlur} />
+                <AnimatePresence>
+                  {touched.hora && errors.hora && <motion.span initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="form-error"><IconAlert width={12} height={12} />{errors.hora}</motion.span>}
+                </AnimatePresence>
               </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="doctor">Médico Asignado <span className="required">*</span></label>
+                <select id="doctor" name="doctor" className={cls('doctor')} value={form.doctor} onChange={handleChange} onBlur={handleBlur}>
+                  <option value="">— Seleccionar —</option>
+                  {medicos.length > 0 ? (
+                    medicos.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)
+                  ) : (
+                    <option value="Dr. Roberto López">Dr. Roberto López</option>
+                  )}
+                </select>
+                <AnimatePresence>
+                  {touched.doctor && errors.doctor && <motion.span initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="form-error"><IconAlert width={12} height={12} />{errors.doctor}</motion.span>}
+                </AnimatePresence>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="prioridad">Prioridad <span className="required">*</span></label>
+                <select id="prioridad" name="prioridad" className={cls('prioridad')} value={form.prioridad} onChange={handleChange} onBlur={handleBlur}>
+                  <option value="Baja">Baja (Rutina)</option>
+                  <option value="Media">Media (Atención Pronta)</option>
+                  <option value="Alta">Alta (Urgencia)</option>
+                  <option value="Crítica">Crítica (Emergencia)</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="tipo">Tipo de Consulta <span className="required">*</span></label>
+                <select id="tipo" name="tipo" className={cls('tipo')} value={form.tipo} onChange={handleChange} onBlur={handleBlur}>
+                  <option value="Consulta General">Consulta General</option>
+                  <option value="Consulta Especialidad">Consulta Especialidad</option>
+                  <option value="Control">Control / Reevaluación</option>
+                  <option value="Emergencia">Emergencia</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="area">Área Médica <span className="required">*</span></label>
+                <input id="area" name="area" type="text" className={cls('area')} value={form.area} onChange={handleChange} onBlur={handleBlur} placeholder="Ej: Cardiología" />
+              </div>
+            </div>
+
+            <div className="section-divider" style={{ marginTop: 24 }}>
+              <span><IconActivity width={16} height={16} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'text-bottom' }} /> Signos Vitales Triage</span>
+              <hr />
+            </div>
+            
+            <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="presion">P. Arterial</label>
+                <input id="presion" name="presion" type="text" className={cls('presion')} value={form.presion} onChange={handleChange} onBlur={handleBlur} placeholder="120/80" />
+                <AnimatePresence>
+                  {touched.presion && errors.presion && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="form-error"><IconAlert width={12} height={12} />{errors.presion}</motion.span>}
+                </AnimatePresence>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="fc">Frec. Cardíaca</label>
+                <div style={{ position: 'relative' }}>
+                  <input id="fc" name="fc" type="number" className={cls('fc')} value={form.fc} onChange={handleChange} onBlur={handleBlur} placeholder="72" />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 12, pointerEvents: 'none' }}>bpm</span>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="temp">Temperatura</label>
+                <div style={{ position: 'relative' }}>
+                  <input id="temp" name="temp" type="number" step="0.1" className={cls('temp')} value={form.temp} onChange={handleChange} onBlur={handleBlur} placeholder="36.5" />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 12, pointerEvents: 'none' }}>°C</span>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="spo2">Sat. Oxígeno</label>
+                <div style={{ position: 'relative' }}>
+                  <input id="spo2" name="spo2" type="number" className={cls('spo2')} value={form.spo2} onChange={handleChange} onBlur={handleBlur} placeholder="98" />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 12, pointerEvents: 'none' }}>%</span>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="peso">Peso</label>
+                <div style={{ position: 'relative' }}>
+                  <input id="peso" name="peso" type="number" step="0.1" className={cls('peso')} value={form.peso} onChange={handleChange} onBlur={handleBlur} placeholder="70.5" />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 12, pointerEvents: 'none' }}>kg</span>
+                </div>
+                <AnimatePresence>
+                  {touched.peso && errors.peso && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="form-error"><IconAlert width={12} height={12} />{errors.peso}</motion.span>}
+                </AnimatePresence>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="altura">Altura</label>
+                <div style={{ position: 'relative' }}>
+                  <input id="altura" name="altura" type="number" step="0.01" className={cls('altura')} value={form.altura} onChange={handleChange} onBlur={handleBlur} placeholder="1.75" />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontSize: 12, pointerEvents: 'none' }}>m</span>
+                </div>
+                <AnimatePresence>
+                  {touched.altura && errors.altura && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="form-error"><IconAlert width={12} height={12} />{errors.altura}</motion.span>}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            <div className="section-divider" style={{ marginTop: 24 }}><span>Evaluación Médica</span><hr /></div>
+            <div className="form-grid">
+              <div className="form-group full">
+                <label className="form-label" htmlFor="sintomas">Síntomas Observados</label>
+                <textarea id="sintomas" name="sintomas" className="form-control" rows="2" value={form.sintomas} onChange={handleChange}></textarea>
+              </div>
+              <div className="form-group full">
+                <label className="form-label" htmlFor="diagnosticoPreliminar">Diagnóstico Preliminar</label>
+                <input id="diagnosticoPreliminar" name="diagnosticoPreliminar" type="text" className="form-control" value={form.diagnosticoPreliminar} onChange={handleChange} />
+              </div>
+              <div className="form-group full">
+                <label className="form-label" htmlFor="diagnosticoFinal">Diagnóstico Final (CIE-10) <span className="required">*</span></label>
+                <input id="diagnosticoFinal" name="diagnosticoFinal" type="text" className={cls('diagnosticoFinal')} value={form.diagnosticoFinal} onChange={handleChange} onBlur={handleBlur} />
+                <AnimatePresence>
+                  {touched.diagnosticoFinal && errors.diagnosticoFinal && <motion.span initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="form-error"><IconAlert width={12} height={12} />{errors.diagnosticoFinal}</motion.span>}
+                </AnimatePresence>
+              </div>
+              <div className="form-group full">
+                <label className="form-label" htmlFor="tratamiento">Tratamiento Recetado <span className="required">*</span></label>
+                <textarea id="tratamiento" name="tratamiento" className={cls('tratamiento')} rows="3" value={form.tratamiento} onChange={handleChange} onBlur={handleBlur}></textarea>
+                <AnimatePresence>
+                  {touched.tratamiento && errors.tratamiento && <motion.span initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="form-error"><IconAlert width={12} height={12} />{errors.tratamiento}</motion.span>}
+                </AnimatePresence>
+              </div>
+              <div className="form-group full">
+                <label className="form-label" htmlFor="indicaciones">Indicaciones Médicas</label>
+                <textarea id="indicaciones" name="indicaciones" className="form-control" rows="2" value={form.indicaciones} onChange={handleChange}></textarea>
+              </div>
+            </div>
+
+            <div className="form-actions" style={{ marginTop: 32 }}>
+              <button type="button" className="btn btn-ghost" onClick={() => { setForm(INITIAL); setErrors({}); setTouched({}); }}>
+                Descartar Cambios
+              </button>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-primary btn-lg" disabled={saving}>
+                <IconSave width={15} height={15} /> {saving ? 'Guardando...' : 'Guardar y Finalizar Consulta'}
+              </motion.button>
             </div>
           </form>
         </div>
-      </div>
-
-      {/* PRINT STYLES - Unchanged structure, kept for PDF functionality */}
-      {printData && (
-        <div id="clinical-print-section" style={{ background: '#fff', color: '#000', padding: '40px', fontFamily: 'sans-serif', display: 'none' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '3px solid #1e3a8a', paddingBottom: '16px', marginBottom: '24px' }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: '24px', color: '#1e3a8a', fontWeight: 'bold' }}>CLÍNICA GRAN POTOSÍ</h1>
-              <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#475569' }}>Servicio Médico Integral</p>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <h2 style={{ margin: 0, fontSize: '16px', color: '#0f172a' }}>RECETA Y EXPEDIENTE</h2>
-              <p style={{ margin: '4px 0 0 0', fontSize: '12px' }}>Fecha: <strong>{new Date(printData.fechaIngreso).toLocaleDateString('es-BO')}</strong></p>
-            </div>
-          </div>
-          <div style={{ marginBottom: '24px' }}>
-            <h3 style={{ borderBottom: '1px solid #cbd5e1', fontSize: '13px', color: '#1e3a8a' }}>Datos del Paciente</h3>
-            <p style={{ fontSize: 12 }}><strong>Nombre:</strong> {printData.nombre} &nbsp; <strong>CI:</strong> {printData.ci}</p>
-          </div>
-          <div style={{ marginBottom: '24px' }}>
-            <h3 style={{ borderBottom: '1px solid #cbd5e1', fontSize: '13px', color: '#1e3a8a' }}>Diagnóstico y Tratamiento</h3>
-            <p style={{ fontSize: 12 }}><strong>Diagnóstico:</strong> {printData.diagnosticoFinal}</p>
-            <p style={{ fontSize: 12, marginTop: 10 }}><strong>Tratamiento Médico Prescrito:</strong><br />{printData.tratamiento}</p>
-          </div>
-          <div style={{ marginTop: '60px', textAlign: 'center', fontSize: 12 }}>
-            <div style={{ borderTop: '1px solid #000', width: '200px', margin: '0 auto', paddingTop: 8 }}>Firma del Médico Tratante</div>
-            <p>{printData.doctorAsignado}</p>
-          </div>
-        </div>
-      )}
+      </motion.div>
     </motion.div>
   );
 }

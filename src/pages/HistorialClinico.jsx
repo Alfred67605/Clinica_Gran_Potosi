@@ -244,7 +244,7 @@ export default function HistorialClinico({ pacientes, pacienteSeleccionadoId, se
                   style={{ position: 'relative', zIndex: 1, paddingLeft: 60, marginBottom: 24, display: 'block' }}
                 >
                   <div className="historial-date" style={{ position: 'absolute', left: 0, top: 4, width: 48, fontWeight: 700, fontSize: 12, textAlign: 'right', color: 'var(--color-text-secondary)', lineHeight: 1.2 }}>
-                    {h.fecha.split('/').join('\n')}
+                    {h.fecha.includes('-') ? h.fecha.split('-').reverse().join('\n') : h.fecha.split('/').join('\n')}
                   </div>
                   <div className="historial-dot" style={{ position: 'absolute', left: 20, top: 6, width: 10, height: 10, borderRadius: '50%', background: getColorForTipo(h.tipo), border: '2px solid var(--color-surface)', boxShadow: `0 0 0 3px ${getColorForTipo(h.tipo)}33` }} />
                   
