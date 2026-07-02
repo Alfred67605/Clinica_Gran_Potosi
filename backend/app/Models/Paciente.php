@@ -23,6 +23,7 @@ class Paciente extends Model
         'correo',
         'contacto_emergencia',
         'estado',
+        'foto',
     ];
 
     protected $appends = ['edad'];

@@ -111,6 +111,24 @@ export async function exportarRespaldo() {
   return request('/respaldos/exportar');
 }
 
+export async function importarRespaldo(jsonData) {
+  return request('/respaldos/importar', {
+    method: 'POST',
+    body: JSON.stringify({ json_data: jsonData }),
+  });
+}
+
 export async function fetchEstadisticas() {
   return request('/reportes/estadisticas');
+}
+
+export async function fetchReportes(filters = {}) {
+  const params = new URLSearchParams();
+  Object.keys(filters).forEach(key => {
+    if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
+      params.append(key, filters[key]);
+    }
+  });
+  const queryString = params.toString() ? `?${params.toString()}` : '';
+  return request(`/reportes/consultas${queryString}`);
 }

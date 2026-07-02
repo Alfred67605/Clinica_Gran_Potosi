@@ -21,6 +21,10 @@ class Consulta extends Model
         'diagnostico_final',
         'tratamiento',
         'indicaciones_medicas',
+        'estado_paciente',
+        'tratamiento_duracion',
+        'tratamiento_horarios',
+        'notas_seguimiento',
     ];
 
     protected $casts = [

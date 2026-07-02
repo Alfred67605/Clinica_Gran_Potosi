@@ -6,8 +6,9 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconSave, IconUser, IconCheck, IconAlert, IconX } from '../components/Icons';
 import { crearPaciente } from '../services/api';
+import CameraCapture from '../components/CameraCapture';
 
-const INITIAL = { nombre:'', ci:'', telefono:'', direccion:'', fechaNacimiento:'', sexo:'', tipoSangre:'' };
+const INITIAL = { nombre:'', ci:'', telefono:'', direccion:'', fechaNacimiento:'', sexo:'', tipoSangre:'', foto: null };
 
 function validate(f) {
   const e = {};
@@ -59,6 +60,7 @@ export default function RegistroPaciente({ reloadPacientes, onNavigate }) {
           tipo_sangre: form.tipoSangre || 'O+',
           estado_civil: 'Soltero/a',
           ciudad: 'Potosí',
+          foto: form.foto,
         });
 
         // Recargar pacientes desde el backend
@@ -144,7 +146,10 @@ export default function RegistroPaciente({ reloadPacientes, onNavigate }) {
 
         <div className="card-body" style={{ padding: '20px 24px' }}>
           <form onSubmit={handleSubmit} noValidate>
-            <div className="section-divider"><span>Información Personal</span><hr /></div>
+            <div className="section-divider"><span>Fotografía del Paciente</span><hr /></div>
+            <CameraCapture photo={form.foto} onChange={(b64) => setForm(p => ({ ...p, foto: b64 }))} />
+
+            <div className="section-divider" style={{ marginTop: 20 }}><span>Información Personal</span><hr /></div>
             <div className="form-grid">
               <div className="form-group full">
                 <label className="form-label" htmlFor="nombre">Nombre Completo <span className="required">*</span></label>

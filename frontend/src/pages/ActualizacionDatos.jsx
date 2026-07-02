@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconEdit, IconSave, IconRefresh, IconAlert, IconCheck } from '../components/Icons';
 import { actualizarPaciente } from '../services/api';
+import CameraCapture from '../components/CameraCapture';
 
 function validate(f) {
   const e = {};
@@ -17,7 +18,7 @@ function validate(f) {
   return e;
 }
 
-const INITIAL_FORM = { nombre: '', ci: '', telefono: '', direccion: '', fechaNacimiento: '', sexo: '', tipoSangre: 'O+' };
+const INITIAL_FORM = { nombre: '', ci: '', telefono: '', direccion: '', fechaNacimiento: '', sexo: '', tipoSangre: 'O+', foto: null };
 
 export default function ActualizacionDatos({ pacientes, reloadPacientes, pacienteSeleccionadoId, onNavigate }) {
   const original = pacientes.find(p => p.id === pacienteSeleccionadoId) || pacientes[0];
@@ -37,7 +38,8 @@ export default function ActualizacionDatos({ pacientes, reloadPacientes, pacient
         direccion: original.direccion || '',
         fechaNacimiento: original.fechaNacimiento || '',
         sexo: original.sexo || '',
-        tipoSangre: original.tipoSangre || 'O+'
+        tipoSangre: original.tipoSangre || 'O+',
+        foto: original.foto || null
       });
       setTouched({});
       setErrors({});
@@ -91,6 +93,7 @@ export default function ActualizacionDatos({ pacientes, reloadPacientes, pacient
           fecha_nacimiento: form.fechaNacimiento,
           sexo: form.sexo,
           tipo_sangre: form.tipoSangre,
+          foto: form.foto,
         });
 
         if (reloadPacientes) await reloadPacientes();
@@ -114,7 +117,8 @@ export default function ActualizacionDatos({ pacientes, reloadPacientes, pacient
         direccion: original.direccion || '',
         fechaNacimiento: original.fechaNacimiento || '',
         sexo: original.sexo || '',
-        tipoSangre: original.tipoSangre || 'O+'
+        tipoSangre: original.tipoSangre || 'O+',
+        foto: original.foto || null
       });
       setErrors({});
       setTouched({});
@@ -176,8 +180,12 @@ export default function ActualizacionDatos({ pacientes, reloadPacientes, pacient
       <motion.div variants={itemVariants} className="card" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ padding: '16px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-light))', color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, flexShrink: 0, boxShadow: 'var(--shadow-sm)' }}>
-              {initials}
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-light))', color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, flexShrink: 0, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+              {original.foto ? (
+                <img src={original.foto} alt={original.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                initials
+              )}
             </div>
             <div>
               <p style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>{original.nombre}</p>
@@ -194,7 +202,10 @@ export default function ActualizacionDatos({ pacientes, reloadPacientes, pacient
         </div>
         <div className="card-body" style={{ padding: '24px' }}>
           <form onSubmit={handleSubmit} noValidate>
-            <div className="section-divider"><span>Información Personal</span><hr /></div>
+            <div className="section-divider"><span>Fotografía del Paciente</span><hr /></div>
+            <CameraCapture photo={form.foto} onChange={(b64) => setForm(p => ({ ...p, foto: b64 }))} />
+
+            <div className="section-divider" style={{ marginTop: 20 }}><span>Información Personal</span><hr /></div>
             <div className="form-grid">
               <div className="form-group full">
                 <label className="form-label" htmlFor="u-nombre">

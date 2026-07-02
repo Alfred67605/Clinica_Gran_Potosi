@@ -53,6 +53,7 @@ class PacienteController extends Controller
             'telefono' => 'required|string|max:15',
             'correo' => 'nullable|email|max:100',
             'contacto_emergencia' => 'nullable|string|max:100',
+            'foto' => 'nullable|string',
             // Antecedentes (opcionales)
             'alergias' => 'nullable|string',
             'enfermedades_previas' => 'nullable|string',
@@ -62,11 +63,21 @@ class PacienteController extends Controller
             'observaciones_generales' => 'nullable|string',
         ]);
 
-        $paciente = Paciente::create($request->only([
+        $fotoPath = null;
+        if ($request->filled('foto') && str_starts_with($request->input('foto'), 'data:image')) {
+            $fotoPath = $this->saveBase64Photo($request->input('foto'));
+        }
+
+        $pacienteData = $request->only([
             'nombre', 'ci', 'fecha_nacimiento', 'sexo', 'tipo_sangre',
             'estado_civil', 'ciudad', 'direccion', 'telefono', 'correo',
             'contacto_emergencia',
-        ]));
+        ]);
+        if ($fotoPath) {
+            $pacienteData['foto'] = $fotoPath;
+        }
+
+        $paciente = Paciente::create($pacienteData);
 
         // Crear antecedentes médicos asociados
         AntecedentesMedicos::create([
@@ -104,6 +115,7 @@ class PacienteController extends Controller
             'correo' => 'nullable|email|max:100',
             'contacto_emergencia' => 'nullable|string|max:100',
             'estado' => 'sometimes|string|in:Activo,Inactivo',
+            'foto' => 'nullable|string',
             // Antecedentes (opcionales)
             'alergias' => 'nullable|string',
             'enfermedades_previas' => 'nullable|string',
@@ -113,11 +125,25 @@ class PacienteController extends Controller
             'observaciones_generales' => 'nullable|string',
         ]);
 
-        $paciente->update($request->only([
+        $pacienteFields = $request->only([
             'nombre', 'ci', 'fecha_nacimiento', 'sexo', 'tipo_sangre',
             'estado_civil', 'ciudad', 'direccion', 'telefono', 'correo',
             'contacto_emergencia', 'estado',
-        ]));
+        ]);
+
+        if ($request->filled('foto') && str_starts_with($request->input('foto'), 'data:image')) {
+            $fotoPath = $this->saveBase64Photo($request->input('foto'), $paciente->foto);
+            if ($fotoPath) {
+                $pacienteFields['foto'] = $fotoPath;
+            }
+        } elseif ($request->has('foto') && empty($request->input('foto'))) {
+            if ($paciente->foto) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($paciente->foto);
+            }
+            $pacienteFields['foto'] = null;
+        }
+
+        $paciente->update($pacienteFields);
 
         // Actualizar antecedentes si se envían
         $antecedentesFields = $request->only([
@@ -156,6 +182,10 @@ class PacienteController extends Controller
                 'diagnostico' => $c->diagnostico_final,
                 'tratamiento' => $c->tratamiento,
                 'indicaciones' => $c->indicaciones_medicas,
+                'estadoPaciente' => $c->estado_paciente ?? 'En Seguimiento',
+                'tratamientoDuracion' => $c->tratamiento_duracion ?? '',
+                'tratamientoHorarios' => $c->tratamiento_horarios ?? '',
+                'notasSeguimiento' => $c->notas_seguimiento ?? '',
                 'sintomas' => $c->sintomas_observados ?? 'Consulta de rutina',
                 'presionArterial' => $sv?->presion_arterial ?? '',
                 'peso' => $sv?->peso ?? '',
@@ -184,7 +214,25 @@ class PacienteController extends Controller
     {
         $ant = $p->antecedentes;
         $ultimaConsulta = $p->consultas->first();
-        $ultimosSignos = $ultimaConsulta?->signosVitales;
+        
+        // Obtener el último control de signos vitales que contenga datos reales registrados
+        $ultimosSignos = \App\Models\SignosVitales::whereHas('consulta', function ($q) use ($p) {
+            $q->where('id_paciente', $p->id_paciente);
+        })
+        ->where(function ($q) {
+            $q->whereNotNull('peso')
+              ->orWhereNotNull('altura')
+              ->orWhereNotNull('presion_arterial')
+              ->orWhereNotNull('frecuencia_cardiaca')
+              ->orWhereNotNull('temperatura')
+              ->orWhereNotNull('saturacion_oxigeno');
+        })
+        ->latest('id_signos')
+        ->first();
+
+        if (!$ultimosSignos) {
+            $ultimosSignos = $ultimaConsulta?->signosVitales;
+        }
 
         return [
             'id' => $p->id_paciente,
@@ -201,6 +249,7 @@ class PacienteController extends Controller
             'contactoEmergencia' => $p->contacto_emergencia ?? '',
             'tipoSangre' => $p->tipo_sangre ?? '',
             'estado' => $p->estado,
+            'foto' => $p->foto ? asset('storage/' . $p->foto) : null,
             // Signos vitales (últimos registrados)
             'peso' => $ultimosSignos?->peso ?? '',
             'altura' => $ultimosSignos?->altura ?? '',
@@ -236,6 +285,10 @@ class PacienteController extends Controller
                     'diagnostico' => $c->diagnostico_final,
                     'tratamiento' => $c->tratamiento,
                     'indicaciones' => $c->indicaciones_medicas,
+                    'estadoPaciente' => $c->estado_paciente ?? 'En Seguimiento',
+                    'tratamientoDuracion' => $c->tratamiento_duracion ?? '',
+                    'tratamientoHorarios' => $c->tratamiento_horarios ?? '',
+                    'notasSeguimiento' => $c->notas_seguimiento ?? '',
                     'sintomas' => $c->sintomas_observados ?? 'Consulta de rutina',
                     'presionArterial' => $sv?->presion_arterial ?? '',
                     'peso' => $sv?->peso ?? '',
@@ -249,5 +302,31 @@ class PacienteController extends Controller
                 ];
             })->values()->toArray(),
         ];
+    }
+
+    private function saveBase64Photo(string $base64Image, ?string $oldPhoto = null): ?string
+    {
+        if (preg_match('/^data:image\/(\w+);base64,/', $base64Image, $type)) {
+            $base64Image = substr($base64Image, strpos($base64Image, ',') + 1);
+            $type = strtolower($type[1]); // jpg, png, etc.
+
+            if (!in_array($type, ['jpg', 'jpeg', 'gif', 'png'])) {
+                return null;
+            }
+
+            $base64Image = str_replace(' ', '+', $base64Image);
+            $imageDecoded = base64_decode($base64Image);
+
+            if ($imageDecoded !== false) {
+                if ($oldPhoto) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($oldPhoto);
+                }
+
+                $fileName = 'paciente_' . time() . '_' . uniqid() . '.' . $type;
+                \Illuminate\Support\Facades\Storage::disk('public')->put('fotos/' . $fileName, $imageDecoded);
+                return 'fotos/' . $fileName;
+            }
+        }
+        return null;
     }
 }

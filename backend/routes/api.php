@@ -34,4 +34,6 @@ Route::delete('/usuarios/{id}', [UsuarioController::class, 'destroy']);
 
 // Respaldos y estadísticas
 Route::get('/respaldos/exportar', [RespaldoController::class, 'exportar']);
+Route::post('/respaldos/importar', [RespaldoController::class, 'importar']);
 Route::get('/reportes/estadisticas', [RespaldoController::class, 'estadisticas']);
+Route::get('/reportes/consultas', [ConsultaController::class, 'reporte']);

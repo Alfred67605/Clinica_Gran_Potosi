@@ -142,7 +142,7 @@ export default function GestionUsuarios({ usuarios, reloadUsuarios }) {
       </AnimatePresence>
 
       <motion.div variants={itemVariants} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="table">
           <thead>
             <tr>
               <th>ID</th>

@@ -24,7 +24,11 @@ const INITIAL = {
   presion: '',
   fc: '',
   temp: '',
-  spo2: ''
+  spo2: '',
+  estadoPaciente: 'En Seguimiento',
+  tratamientoDuracion: '',
+  tratamientoHorarios: '',
+  notasSeguimiento: ''
 };
 
 function validate(f) {
@@ -101,6 +105,10 @@ export default function RegistroClinico({ pacientes, reloadPacientes, pacienteSe
           diagnostico_final: form.diagnosticoFinal.trim(),
           tratamiento: form.tratamiento.trim(),
           indicaciones_medicas: form.indicaciones.trim() || null,
+          estado_paciente: form.estadoPaciente,
+          tratamiento_duracion: form.tratamientoDuracion.trim() || null,
+          tratamiento_horarios: form.tratamientoHorarios.trim() || null,
+          notas_seguimiento: form.notasSeguimiento.trim() || null,
           peso: form.peso ? parseFloat(form.peso) : null,
           altura: form.altura ? parseFloat(form.altura) : null,
           imc: imcCalc,
@@ -168,8 +176,12 @@ export default function RegistroClinico({ pacientes, reloadPacientes, pacienteSe
 
       <motion.div variants={itemVariants} className="card" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-light))', color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <IconUser width={20} height={20} />
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-light))', color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+            {paciente.foto ? (
+              <img src={paciente.foto} alt={paciente.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <IconUser width={20} height={20} />
+            )}
           </div>
           <div>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700, marginBottom: 2 }}>Paciente Actual</p>
@@ -324,6 +336,36 @@ export default function RegistroClinico({ pacientes, reloadPacientes, pacienteSe
               <div className="form-group full">
                 <label className="form-label" htmlFor="indicaciones">Indicaciones Médicas</label>
                 <textarea id="indicaciones" name="indicaciones" className="form-control" rows="2" value={form.indicaciones} onChange={handleChange}></textarea>
+              </div>
+            </div>
+
+            <div className="section-divider" style={{ marginTop: 24 }}><span>Seguimiento y Prescripción Detallada</span><hr /></div>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label" htmlFor="estadoPaciente">Estado de Evolución (En qué se quedó)</label>
+                <select id="estadoPaciente" name="estadoPaciente" className="form-control" value={form.estadoPaciente} onChange={handleChange}>
+                  <option value="En Seguimiento">En Seguimiento</option>
+                  <option value="Alta Médica">Alta Médica</option>
+                  <option value="En Observación">En Observación</option>
+                  <option value="Control Pendiente">Control Pendiente</option>
+                  <option value="Hospitalizado">Hospitalizado</option>
+                  <option value="Derivado a Especialista">Derivado a Especialista</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="tratamientoDuracion">Duración del Tratamiento (Hasta cuándo)</label>
+                <input id="tratamientoDuracion" name="tratamientoDuracion" type="text" className="form-control" value={form.tratamientoDuracion} onChange={handleChange} placeholder="Ej: 7 días / Hasta el 2026-07-15" />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="tratamientoHorarios">Horarios de Medicación (A qué hora)</label>
+                <input id="tratamientoHorarios" name="tratamientoHorarios" type="text" className="form-control" value={form.tratamientoHorarios} onChange={handleChange} placeholder="Ej: Cada 8 horas (08:00, 16:00, 24:00)" />
+              </div>
+
+              <div className="form-group full">
+                <label className="form-label" htmlFor="notasSeguimiento">Notas de Seguimiento y Evolución de Enfermedad</label>
+                <textarea id="notasSeguimiento" name="notasSeguimiento" className="form-control" rows="2" value={form.notasSeguimiento} onChange={handleChange} placeholder="Detalle la evolución o progreso de la enfermedad del paciente..."></textarea>
               </div>
             </div>
 

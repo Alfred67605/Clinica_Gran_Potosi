@@ -11,9 +11,9 @@ Sigue estos pasos para poner en marcha el proyecto en tu entorno local:
 ### Requisitos Previos
 - **Node.js** (versión 18 o superior recomendada)
 - **npm** (incluido con Node.js)
-- **PHP** (versión 8.1 o superior)
+- **PHP** (versión 8.2 o superior recomendada)
 - **Composer** (gestor de dependencias de PHP)
-- **MySQL/MariaDB** (o el motor de base de datos de tu preferencia)
+- **PostgreSQL** (versión 15 o superior como motor de base de datos)
 
 ### Instalación en una nueva PC (Clonación)
 Sigue estos pasos para levantar el proyecto completo (Frontend y Backend) en otra computadora:
@@ -40,23 +40,27 @@ Sigue estos pasos para levantar el proyecto completo (Frontend y Backend) en otr
    ```bash
    cp .env.example .env
    ```
-4. Configura tu base de datos en el archivo `.env` recientemente creado (variables `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).
-5. Genera la clave de la aplicación:
+4. Crea una base de datos en PostgreSQL llamada `clinica_gran_potosi`.
+5. Configura tu conexión a PostgreSQL en el archivo `.env` recientemente creado (variables `DB_CONNECTION=pgsql`, `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_DATABASE=clinica_gran_potosi`, `DB_USERNAME`, `DB_PASSWORD`).
+6. Genera la clave de la aplicación:
    ```bash
    php artisan key:generate
    ```
-6. Ejecuta las migraciones y los seeders para poblar la base de datos:
+7. Ejecuta las migraciones y los seeders para poblar la base de datos (se cargará el usuario administrador por defecto):
    ```bash
    php artisan migrate:fresh --seed
    ```
-7. Inicia el servidor de desarrollo del backend:
+8. Inicia el servidor de desarrollo del backend:
    ```bash
    php artisan serve
    ```
 El backend estará disponible en `http://localhost:8000`.
 
 #### Configuración del Frontend (React + Vite)
-1. Abre una **nueva terminal** y asegúrate de estar en la raíz del proyecto (`Clinica_Gran_Potosi`).
+1. Abre una **nueva terminal** y navega a la carpeta del frontend:
+   ```bash
+   cd frontend
+   ```
 2. Instala las dependencias necesarias:
    ```bash
    npm install
@@ -68,38 +72,38 @@ El backend estará disponible en `http://localhost:8000`.
 El frontend estará disponible en `http://localhost:5173`.
 
 ### Producción
-Para generar el bundle optimizado para producción del frontend, en la raíz del proyecto ejecuta:
+Para generar el bundle optimizado para producción del frontend:
 ```bash
+cd frontend
 npm run build
 ```
-Los archivos resultantes se encontrarán en la carpeta `dist/`.
+Los archivos resultantes se encontrarán en la carpeta `frontend/dist/`.
 
 ---
 
 ##  Estructura del Proyecto
 
-El proyecto sigue una arquitectura modular basada en componentes de React, organizada de la siguiente manera:
+El proyecto sigue una arquitectura desacoplada organizada de la siguiente manera:
 
 ```text
-proyecto_clinica/
-├── public/              # Activos estáticos (logos, iconos)
-├── src/
-│   ├── assets/          # Recursos multimedia y SVG
-│   ├── components/      # Componentes reutilizables (Sidebar, Navbar, Cards)
-│   ├── pages/           # Vistas principales de la aplicación
-│   │   ├── RegistroPaciente.jsx
-│   │   ├── BusquedaPaciente.jsx
-│   │   ├── ActualizacionDatos.jsx
-│   │   ├── HistorialClinico.jsx
-│   │   ├── Reportes.jsx
-│   │   ├── GestionUsuarios.jsx
-│   │   └── Respaldo.jsx
-│   ├── App.jsx          # Lógica central y enrutamiento (Hash Routing)
-│   ├── main.jsx         # Punto de entrada de la aplicación
-│   └── index.css        # Sistema de diseño y estilos globales
-├── index.html           # Plantilla HTML base
-├── package.json         # Dependencias y scripts
-└── tsconfig.json        # Configuración de TypeScript (si aplica)
+Clinica_Gran_Potosi/
+├── backend/                 # API REST desarrollada en Laravel
+│   ├── app/                 # Modelos, Controladores y middleware
+│   ├── database/            # Migraciones y seeders de PostgreSQL
+│   └── routes/api.php       # Rutas del backend
+├── frontend/                # Aplicación de cliente SPA (React + Vite)
+│   ├── public/              # Activos estáticos (logos, fotos)
+│   ├── src/                 # Código fuente
+│   │   ├── assets/          # Recursos multimedia y SVG
+│   │   ├── components/      # Componentes comunes (Sidebar, Icons)
+│   │   ├── pages/           # Vistas principales (Reportes, Historial, Usuarios)
+│   │   ├── services/api.js  # Cliente de API e integraciones de fetch
+│   │   ├── App.jsx          # Lógica central de navegación
+│   │   └── index.css        # Estilos generales y media queries
+│   ├── index.html           # HTML principal
+│   ├── package.json         # Dependencias npm
+│   └── tsconfig.json        # Configuración de tipados
+└── README.md
 ```
 
 ---

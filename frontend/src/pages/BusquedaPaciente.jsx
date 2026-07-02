@@ -164,9 +164,13 @@ export default function BusquedaPaciente({ pacientes, onNavigate, setPacienteSel
                       <td style={{ color:'var(--color-text-muted)', fontWeight:600, fontSize: 12 }}>{i+1}</td>
                       <td>
                         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                          <div className="avatar" style={{
-                            background: `linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-glow))`,
-                          }}>{getInitials(p.nombre)}</div>
+                          {p.foto ? (
+                            <img src={p.foto} alt={p.nombre} className="avatar" style={{ objectFit: 'cover' }} />
+                          ) : (
+                            <div className="avatar" style={{
+                              background: `linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-glow))`,
+                            }}>{getInitials(p.nombre)}</div>
+                          )}
                           <div>
                             <span style={{ fontWeight:600, display: 'block', fontSize: 13.5 }}>{p.nombre}</span>
                             <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{p.areaMedica || 'General'}</span>

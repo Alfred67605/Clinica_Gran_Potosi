@@ -934,7 +934,7 @@ input, select, textarea { font-family: inherit; }
    ========================================= */
 @media print {
   body { background: white !important; color: black !important; }
-  .sidebar, .navbar, .btn, .page-header, .card, .alert, .modal-overlay, .sidebar-logo, .navbar-user {
+  .sidebar, .navbar, .btn, .page-header, .alert, .modal-overlay, .sidebar-logo, .navbar-user {
     display: none !important;
   }
   .main-content { margin-left: 0 !important; }
@@ -1175,4 +1175,370 @@ input, select, textarea { font-family: inherit; }
     radial-gradient(ellipse 80% 60% at 50% 0%, rgba(59,130,246,0.06) 0%, transparent 50%),
     radial-gradient(ellipse 60% 40% at 80% 100%, rgba(99,102,241,0.04) 0%, transparent 60%),
     var(--color-bg);
+}
+
+/* =========================================
+   PRINT STYLESHEET (Ficha Médica Formal)
+   ========================================= */
+.print-only-header {
+  display: none;
+}
+
+.print-only-footer {
+  display: none;
+}
+
+@media print {
+  /* Ocultar elementos de navegación y de control */
+  .sidebar, .navbar, .page-header, .autocomplete-wrapper, .btn, .card-header-icon, .chip, .alert, .no-print {
+    display: none !important;
+  }
+  
+  /* Resetear el layout principal */
+  body, html {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important;
+  }
+  
+  .app-layout {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  .main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  
+  .page-wrapper {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: none !important;
+  }
+
+  /* Cabecera del expediente formal */
+  .ficha-header {
+    background: #fff !important;
+    color: #000 !important;
+    border: 2px solid #000 !important;
+    border-radius: 0 !important;
+    padding: 15px !important;
+    margin-bottom: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 20px !important;
+    box-shadow: none !important;
+  }
+  
+  .ficha-header h2 {
+    color: #000 !important;
+    font-size: 16pt !important;
+    margin: 0 0 4px 0 !important;
+    text-shadow: none !important;
+  }
+  
+  .ficha-header p {
+    color: #333 !important;
+    font-size: 10pt !important;
+  }
+  
+  .ficha-header-badges {
+    display: flex !important;
+    gap: 8px !important;
+    margin-top: 8px !important;
+    flex-wrap: wrap !important;
+  }
+  
+  .ficha-badge {
+    background: #f3f4f6 !important;
+    border: 1px solid #ccc !important;
+    color: #000 !important;
+    padding: 2px 6px !important;
+    font-size: 9pt !important;
+    border-radius: 4px !important;
+    backdrop-filter: none !important;
+  }
+  
+  .ficha-avatar {
+    width: 80px !important;
+    height: 80px !important;
+    border: 2px solid #000 !important;
+    box-shadow: none !important;
+    border-radius: 6px !important;
+  }
+
+  .ficha-avatar img {
+    border-radius: 0 !important;
+  }
+  
+  /* Hacer que las tarjetas se impriman de manera formal y sin sombras */
+  .card {
+    border: 1px solid #000 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    margin-bottom: 20px !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 20px !important;
+    page-break-inside: auto !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  th, td {
+    border: 1px solid #000 !important;
+    padding: 6px 8px !important;
+    text-align: left !important;
+  }
+
+  th {
+    background-color: #f3f4f6 !important;
+    font-weight: bold !important;
+  }
+
+  .card-header {
+    border-bottom: 2px solid #000 !important;
+    background: #f3f4f6 !important;
+    padding: 8px 12px !important;
+  }
+
+  .card-header h2 {
+    color: #000 !important;
+    font-size: 11pt !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    margin: 0 !important;
+  }
+  
+  .card-body {
+    padding: 12px !important;
+  }
+  
+  /* Forzar visualización de cuadrículas en 2 columnas */
+  div[style*="display: grid"], div[style*="display:grid"] {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Excepción para el grid principal del historial */
+  .page-wrapper > div[style*="display: grid"] {
+    display: block !important;
+  }
+
+  /* Listas de datos personales */
+  div[style*="border-bottom: 1px solid"] {
+    border-bottom: 1px dashed #bbb !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 6px !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Bloque de signos vitales */
+  div[style*="background: var(--color-bg)"] {
+    background: #f9fafb !important;
+    border: 1px solid #ddd !important;
+    border-left: 4px solid #000 !important;
+    box-shadow: none !important;
+    margin-bottom: 8px !important;
+    transform: none !important;
+  }
+
+  /* Bloques de medicación habitual */
+  div[style*="background: var(--color-primary-light)"] {
+    background: #f3f4f6 !important;
+    border: 1px solid #000 !important;
+    color: #000 !important;
+    padding: 10px !important;
+  }
+  
+  /* Quitar línea vertical de timeline */
+  div[style*="position: absolute"][style*="left: 24px"] {
+    display: none !important;
+  }
+
+  .historial-item {
+    padding-left: 0 !important;
+    margin-bottom: 20px !important;
+    page-break-inside: avoid !important;
+  }
+
+  .historial-date {
+    position: static !important;
+    text-align: left !important;
+    font-size: 10pt !important;
+    font-weight: bold !important;
+    color: #000 !important;
+    border-bottom: 1px solid #000 !important;
+    padding-bottom: 2px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .historial-dot {
+    display: none !important;
+  }
+
+  .historial-content {
+    border: 1px solid #000 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    padding: 12px !important;
+  }
+
+  .historial-content h4 {
+    border-bottom: 1px dashed #ccc !important;
+    padding-bottom: 6px !important;
+    margin-bottom: 10px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+  }
+
+  .historial-content h4 span[style*="margin-left: auto"] {
+    font-size: 9.5pt !important;
+  }
+
+  div[style*="border-left: 3px solid var(--color-success)"] {
+    background: #fdfdfd !important;
+    border: 1px solid #aaa !important;
+    border-left: 4px solid #000 !important;
+  }
+
+  /* Cabecera membretada de impresión */
+  .print-only-header {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Firma del médico al final del documento */
+  .print-only-footer {
+    display: block !important;
+    margin-top: 50px !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Premium letterhead divider line */
+  .print-brand-divider {
+    height: 4px !important;
+    background: linear-gradient(to right, #1e3a8a, #3b82f6) !important;
+    border: none !important;
+    margin: 8px 0 20px 0 !important;
+  }
+
+  /* Filters list */
+  .print-filters-box {
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 12px 18px !important;
+    margin-bottom: 20px !important;
+  }
+
+  /* Premium Consultation Block */
+  .consultation-print-card {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    margin-bottom: 22px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+    overflow: hidden !important;
+  }
+
+  .consultation-print-header {
+    background: #f1f5f9 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    padding: 10px 16px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    font-size: 10.5pt !important;
+    color: #1e293b !important;
+  }
+
+  .consultation-print-patient-col {
+    width: 250px !important;
+    background: #f8fafc !important;
+    border-right: 1px solid #cbd5e1 !important;
+    padding: 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    align-items: center !important;
+    text-align: center !important;
+  }
+
+  .consultation-print-patient-photo {
+    width: 70px !important;
+    height: 70px !important;
+    object-fit: cover !important;
+    border: 2px solid #fff !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    border-radius: 50% !important;
+  }
+
+  .consultation-print-patient-name {
+    font-weight: 700 !important;
+    font-size: 10.5pt !important;
+    color: #0f172a !important;
+    margin-bottom: 2px !important;
+  }
+
+  .consultation-print-patient-ci {
+    font-family: monospace !important;
+    font-size: 9pt !important;
+    color: #475569 !important;
+    background: #cbd5e1 !important;
+    padding: 2px 8px !important;
+    border-radius: 4px !important;
+    font-weight: 600 !important;
+  }
+
+  .consultation-print-details-col {
+    flex: 1 !important;
+    padding: 14px 18px !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1.2fr !important;
+    gap: 16px !important;
+    font-size: 9.5pt !important;
+    color: #334155 !important;
+  }
+
+  .consultation-print-section-title {
+    text-transform: uppercase !important;
+    font-size: 7.5pt !important;
+    color: #64748b !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.5px !important;
+    display: block !important;
+    margin-bottom: 4px !important;
+  }
+
+  .consultation-print-prescription-box {
+    background: #f0fdf4 !important;
+    border: 1px solid #bbf7d0 !important;
+    border-radius: 6px !important;
+    padding: 10px 14px !important;
+  }
+}
+
+.print-only {
+  display: none;
 }

@@ -29,6 +29,10 @@ class ConsultaController extends Controller
             'diagnostico_final' => 'required|string',
             'tratamiento' => 'nullable|string',
             'indicaciones_medicas' => 'nullable|string',
+            'estado_paciente' => 'nullable|string|max:50',
+            'tratamiento_duracion' => 'nullable|string|max:100',
+            'tratamiento_horarios' => 'nullable|string|max:150',
+            'notas_seguimiento' => 'nullable|string',
             // Signos vitales
             'peso' => 'nullable|numeric|min:0',
             'altura' => 'nullable|numeric|min:0',
@@ -51,6 +55,10 @@ class ConsultaController extends Controller
             'diagnostico_final' => $request->diagnostico_final,
             'tratamiento' => $request->tratamiento,
             'indicaciones_medicas' => $request->indicaciones_medicas,
+            'estado_paciente' => $request->input('estado_paciente', 'En Seguimiento'),
+            'tratamiento_duracion' => $request->tratamiento_duracion,
+            'tratamiento_horarios' => $request->tratamiento_horarios,
+            'notas_seguimiento' => $request->notas_seguimiento,
         ]);
 
         // Crear signos vitales asociados
@@ -74,5 +82,76 @@ class ConsultaController extends Controller
             'consulta_id' => $consulta->id_consulta,
             'paciente' => app(PacienteController::class)->formatPacienteForApi($paciente),
         ], 201);
+    }
+
+    /**
+     * Obtener listado de consultas filtrado para reportes.
+     */
+    public function reporte(Request $request): JsonResponse
+    {
+        $query = Consulta::with(['paciente', 'usuario', 'signosVitales']);
+
+        // Filtrar por paciente
+        if ($request->filled('id_paciente')) {
+            $query->where('id_paciente', $request->id_paciente);
+        }
+
+        // Filtrar por área médica
+        if ($request->filled('area_medica')) {
+            $query->where('area_medica', $request->area_medica);
+        }
+
+        // Filtrar por doctor
+        if ($request->filled('id_usuario')) {
+            $query->where('id_usuario', $request->id_usuario);
+        }
+
+        // Filtrar por fecha / rango de fecha
+        if ($request->filled('periodo')) {
+            $periodo = $request->periodo; // 'dia', 'semana', 'mes', 'custom'
+            if ($periodo === 'dia') {
+                $query->whereDate('fecha_hora', now()->toDateString());
+            } elseif ($periodo === 'semana') {
+                $query->where('fecha_hora', '>=', now()->subWeek());
+            } elseif ($periodo === 'mes') {
+                $query->where('fecha_hora', '>=', now()->subMonth());
+            } elseif ($periodo === 'custom' && $request->filled('fecha_inicio') && $request->filled('fecha_fin')) {
+                $query->whereBetween('fecha_hora', [
+                    $request->fecha_inicio . ' 00:00:00',
+                    $request->fecha_fin . ' 23:59:59'
+                ]);
+            }
+        }
+
+        $consultas = $query->orderBy('fecha_hora', 'desc')->get();
+
+        $result = $consultas->map(function ($c) {
+            return [
+                'id_consulta' => $c->id_consulta,
+                'fecha_hora' => $c->fecha_hora->toDateTimeString(),
+                'fecha' => $c->fecha_hora->format('Y-m-d'),
+                'tipo_consulta' => $c->tipo_consulta,
+                'area_medica' => $c->area_medica,
+                'prioridad_medica' => $c->prioridad_medica,
+                'paciente' => [
+                    'id_paciente' => $c->paciente->id_paciente ?? null,
+                    'nombre' => $c->paciente->nombre ?? 'No registrado',
+                    'ci' => $c->paciente->ci ?? '',
+                    'foto' => $c->paciente->foto ? asset('storage/' . $c->paciente->foto) : null,
+                ],
+                'medico' => [
+                    'id_usuario' => $c->usuario->id_usuario ?? null,
+                    'nombre' => $c->usuario->nombre ?? 'No asignado',
+                ],
+                'diagnostico_final' => $c->diagnostico_final,
+                'tratamiento' => $c->tratamiento,
+                'estado_paciente' => $c->estado_paciente,
+                'tratamiento_duracion' => $c->tratamiento_duracion,
+                'tratamiento_horarios' => $c->tratamiento_horarios,
+                'notas_seguimiento' => $c->notas_seguimiento,
+            ];
+        });
+
+        return response()->json($result);
     }
 }

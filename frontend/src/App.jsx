@@ -57,7 +57,7 @@ export default function App() {
   const [pacientes, setPacientes] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [respaldos, setRespaldos] = useState(RESPALDOS_INICIALES);
-  const [pacienteSeleccionadoId, setPacienteSeleccionadoId] = useState(1);
+  const [pacienteSeleccionadoId, setPacienteSeleccionadoId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -77,9 +77,7 @@ export default function App() {
         ]);
         setPacientes(pacientesData);
         setUsuarios(usuariosData);
-        if (pacientesData.length > 0) {
-          setPacienteSeleccionadoId(pacientesData[0].id);
-        }
+        // No auto-seleccionar paciente al inicio para mostrar el listado por defecto
       } catch (err) {
         console.error('Error cargando datos del backend:', err);
         setError(err.message);
@@ -120,6 +118,13 @@ export default function App() {
     setActiveScreen(screenId);
   }
 
+  function handleSidebarNavigate(screenId) {
+    if (screenId === 'historial') {
+      setPacienteSeleccionadoId(null);
+    }
+    navigate(screenId);
+  }
+
   // Redirige al Dashboard inicial
   useEffect(() => {
     if (!window.location.hash || window.location.hash === '#') {
@@ -148,7 +153,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="app-layout">
-        <Sidebar active={activeScreen} onNavigate={navigate} currentUser={currentUser} allowedScreens={ROLE_PERMISSIONS[currentUser.rol]} />
+        <Sidebar active={activeScreen} onNavigate={handleSidebarNavigate} currentUser={currentUser} allowedScreens={ROLE_PERMISSIONS[currentUser.rol]} />
         <div className="main-content">
           <Navbar pageTitle="Iniciando Sesión..." currentUser={currentUser} onLogout={handleLogout} />
           <div className="page-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -169,7 +174,7 @@ export default function App() {
   if (error) {
     return (
       <div className="app-layout">
-        <Sidebar active={activeScreen} onNavigate={navigate} currentUser={currentUser} allowedScreens={ROLE_PERMISSIONS[currentUser.rol]} />
+        <Sidebar active={activeScreen} onNavigate={handleSidebarNavigate} currentUser={currentUser} allowedScreens={ROLE_PERMISSIONS[currentUser.rol]} />
         <div className="main-content">
           <Navbar pageTitle="Error de Conexión" currentUser={currentUser} onLogout={handleLogout} />
           <div className="page-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -196,7 +201,7 @@ export default function App() {
   if (!allowedScreens.includes(activeScreen)) {
     return (
       <div className="app-layout">
-        <Sidebar active={activeScreen} onNavigate={navigate} currentUser={currentUser} allowedScreens={allowedScreens} />
+        <Sidebar active={activeScreen} onNavigate={handleSidebarNavigate} currentUser={currentUser} allowedScreens={allowedScreens} />
         <div className="main-content">
           <Navbar pageTitle="Acceso Denegado" currentUser={currentUser} onLogout={handleLogout} />
           <div className="page-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -220,7 +225,7 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      <Sidebar active={activeScreen} onNavigate={navigate} currentUser={currentUser} allowedScreens={allowedScreens} />
+      <Sidebar active={activeScreen} onNavigate={handleSidebarNavigate} currentUser={currentUser} allowedScreens={allowedScreens} />
       <div className="main-content">
         <Navbar pageTitle={label} currentUser={currentUser} onLogout={handleLogout} />
         <AnimatePresence mode="wait">
